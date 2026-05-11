@@ -1,8 +1,60 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\OrganizerEventController;
+use App\Http\Controllers\Api\PublicEventController;
+use App\Http\Controllers\Api\CustomerOrderController;
+use App\Http\Controllers\Api\CustomerTicketController;
+use App\Http\Controllers\Api\AdminEventController;
+use App\Http\Controllers\Api\OrganizerZoneController;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+Route::get('/events', [PublicEventController::class, 'index']);
+Route::get('/events/{event}', [PublicEventController::class, 'show']);
+Route::get('/categories', [PublicEventController::class, 'categoriesList']);
+
+Route::post('/auth/register/customer', [AuthController::class, 'registerCustomer']);
+Route::post('/auth/register/organizer', [AuthController::class, 'registerOrganizer']);
+Route::post('/auth/verify', [AuthController::class, 'verifyEmail']);
+Route::post('/auth/resend-code', [AuthController::class, 'resendCode']);
+Route::post('/auth/login', [AuthController::class, 'login']);
+
+Route::middleware(['auth:sanctum'])->group(function (): void {
+    Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+
+    Route::middleware(['role:admin'])->group(function (): void {
+        Route::get('/admin/ping', fn () => response()->json([
+            'success' => true,
+            'message' => 'Admin access granted.',
+        ]));
+
+        Route::put('/admin/events/{event}', [AdminEventController::class, 'update']);
+    });
+
+    Route::middleware(['role:organizer'])->group(function (): void {
+        Route::get('/organizer/ping', fn () => response()->json([
+            'success' => true,
+            'message' => 'Organizer access granted.',
+        ]));
+
+        Route::apiResource('/organizer/events', OrganizerEventController::class);
+
+        Route::get('/organizer/events/{event}/zones', [OrganizerZoneController::class, 'index']);
+        Route::post('/organizer/events/{event}/zones', [OrganizerZoneController::class, 'store']);
+        Route::get('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'show']);
+        Route::put('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'update']);
+        Route::delete('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'destroy']);
+    });
+
+    Route::middleware(['role:customer'])->group(function (): void {
+        Route::get('/customer/ping', fn () => response()->json([
+            'success' => true,
+            'message' => 'Customer access granted.',
+        ]));
+
+        Route::apiResource('/customer/orders', CustomerOrderController::class)->only(['index', 'show']);
+        Route::apiResource('/customer/tickets', CustomerTicketController::class)->only(['index', 'show']);
+    });
+});
