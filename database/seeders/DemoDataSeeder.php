@@ -174,7 +174,7 @@ class DemoDataSeeder extends Seeder
                 'ticket_sale_starts_at' => now()->addDays(10)->setTime(10, 0),
                 'ticket_sale_ends_at' => now()->addDays(38)->setTime(23, 59),
                 'status' => 'approved',
-                'display_type' => 'arc',
+                'display_type' => 'stadium',
                 'master_width' => 90,
                 'master_length' => 55,
             ],

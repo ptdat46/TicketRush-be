@@ -949,7 +949,7 @@ Validation:
 | `bank_name` | No | string, max 255 |
 | `bank_account_number` | No | string, max 50 |
 | `bank_account_name` | No | string, max 255 |
-| `display_type` | Yes | `rectangular`, `arc`, `stadium` |
+| `display_type` | Yes | `rectangular`, `stadium` |
 | `master_width` | Yes | integer, min 1, max 1000 |
 | `master_length` | Yes | integer, min 1, max 1000 |
 
@@ -1292,7 +1292,7 @@ Validation:
 | `ticket_sale_starts_at` | No | date |
 | `ticket_sale_ends_at` | No | date, after_or_equal ticket_sale_starts_at |
 | `status` | No | `pending`, `approved`, `rejected` |
-| `display_type` | No | `rectangular`, `arc`, `stadium` |
+| `display_type` | No | `rectangular`, `stadium` |
 | `master_width` | No | integer, min 1, max 1000 |
 | `master_length` | No | integer, min 1, max 1000 |
 

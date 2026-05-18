@@ -28,7 +28,7 @@ class StoreEventRequest extends FormRequest
             'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
             'ticket_sale_starts_at' => ['nullable', 'date'],
             'ticket_sale_ends_at' => ['nullable', 'date', 'after_or_equal:ticket_sale_starts_at'],
-            'display_type' => ['required', Rule::in(['rectangular', 'arc', 'stadium'])],
+            'display_type' => ['required', Rule::in(['rectangular', 'stadium'])],
             'bank_name' => ['nullable', 'string', 'max:255'],
             'bank_account_number' => ['nullable', 'string', 'max:50'],
             'bank_account_name' => ['nullable', 'string', 'max:255'],

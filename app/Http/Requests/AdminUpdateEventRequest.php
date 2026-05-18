@@ -29,7 +29,7 @@ class AdminUpdateEventRequest extends FormRequest
             'ticket_sale_starts_at' => ['nullable', 'date'],
             'ticket_sale_ends_at' => ['nullable', 'date', 'after_or_equal:ticket_sale_starts_at'],
             'status' => ['sometimes', 'required', Rule::in(['pending', 'approved', 'rejected'])],
-            'display_type' => ['sometimes', 'required', Rule::in(['rectangular', 'arc', 'stadium'])],
+            'display_type' => ['sometimes', 'required', Rule::in(['rectangular', 'stadium'])],
             'master_width' => ['sometimes', 'required', 'integer', 'min:1', 'max:1000'],
             'master_length' => ['sometimes', 'required', 'integer', 'min:1', 'max:1000'],
         ];

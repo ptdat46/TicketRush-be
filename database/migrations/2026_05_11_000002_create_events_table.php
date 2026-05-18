@@ -20,7 +20,7 @@ return new class extends Migration
             $table->timestamp('starts_at')->nullable()->comment('Scheduled start time of the event.');
             $table->timestamp('ends_at')->nullable()->comment('Scheduled end time of the event.');
             $table->string('status')->default('pending')->comment('Admin approval workflow status: pending, approved, or rejected.');
-            $table->string('display_type')->comment('Master map template type: rectangular, arc, or stadium.');
+            $table->string('display_type')->comment('Master map template type: rectangular or stadium.');
             $table->unsignedInteger('master_width')->comment('Total width of the master map measured in grid slots.');
             $table->unsignedInteger('master_length')->comment('Total length of the master map measured in grid slots.');
             $table->timestamps();
