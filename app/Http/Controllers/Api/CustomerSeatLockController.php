@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\ApiProblemException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LockSeatsRequest;
 use App\Http\Resources\SeatResource;
@@ -14,11 +13,7 @@ class CustomerSeatLockController extends Controller
 {
     public function store(LockSeatsRequest $request, Event $event, SeatLockService $seatLockService): JsonResponse
     {
-        try {
-            $seats = $seatLockService->lockSeats($event, $request->user(), $request->validated('seat_ids'));
-        } catch (ApiProblemException $exception) {
-            return $this->problem($exception);
-        }
+        $seats = $seatLockService->lockSeats($event, $request->user(), $request->validated('seat_ids'));
 
         return response()->json([
             'success' => true,
@@ -37,14 +32,5 @@ class CustomerSeatLockController extends Controller
             'message' => 'Seats released successfully.',
             'data' => SeatResource::collection($seats),
         ]);
-    }
-
-    private function problem(ApiProblemException $exception): JsonResponse
-    {
-        return response()->json([
-            'success' => false,
-            'message' => $exception->getMessage(),
-            'errors' => $exception->errors() ?: null,
-        ], $exception->statusCode());
     }
 }

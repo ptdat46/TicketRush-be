@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\ApiProblemException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckoutSeatsRequest;
 use App\Http\Resources\OrderResource;
@@ -18,21 +17,13 @@ class CustomerOrderController extends Controller
     {
         $data = $request->validated();
 
-        try {
-            $order = $checkoutService->checkout(
-                $event,
-                $request->user(),
-                $data['seat_ids'],
-                $data['payment_method'] ?? 'mock',
-                $data['payment_reference'] ?? null,
-            );
-        } catch (ApiProblemException $exception) {
-            return response()->json([
-                'success' => false,
-                'message' => $exception->getMessage(),
-                'errors' => $exception->errors() ?: null,
-            ], $exception->statusCode());
-        }
+        $order = $checkoutService->checkout(
+            $event,
+            $request->user(),
+            $data['seat_ids'],
+            $data['payment_method'] ?? 'mock',
+            $data['payment_reference'] ?? null,
+        );
 
         return response()->json([
             'success' => true,

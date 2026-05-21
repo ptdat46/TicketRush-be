@@ -15,14 +15,19 @@ class CheckoutService
 {
     public function __construct(
         private readonly SeatLockService $seatLockService,
+        private readonly WaitingRoomService $waitingRoomService,
+        private readonly SeatRealtimeService $seatRealtimeService,
     ) {}
 
     public function checkout(Event $event, User $customer, array $seatIds, string $paymentMethod = 'mock', ?string $paymentReference = null): Order
     {
+        $this->waitingRoomService->ensureActiveAccess($event, $customer);
         $this->seatLockService->ensureEventSaleWindowIsOpen($event);
         $this->seatLockService->releaseExpiredLocks($event);
 
-        return DB::transaction(function () use ($event, $customer, $seatIds, $paymentMethod, $paymentReference): Order {
+        $soldSeatIds = [];
+
+        $order = DB::transaction(function () use ($event, $customer, $seatIds, $paymentMethod, $paymentReference, &$soldSeatIds): Order {
             $seats = Seat::query()
                 ->with('zone')
                 ->whereIn('id', $seatIds)
@@ -69,6 +74,7 @@ class CheckoutService
                     'locked_by' => null,
                     'locked_at' => null,
                 ]);
+                $soldSeatIds[] = $seat->id;
 
                 Ticket::create([
                     'ticket_code' => $this->makeUniqueCode('TICK', Ticket::class, 'ticket_code'),
@@ -84,6 +90,15 @@ class CheckoutService
 
             return $order->load(['event', 'tickets.seat.zone'])->loadCount('tickets');
         });
+
+        $this->seatRealtimeService->broadcastSeats(
+            Seat::query()
+                ->with('zone')
+                ->whereIn('id', $soldSeatIds)
+                ->get()
+        );
+
+        return $order;
     }
 
     private function makeReference(): string

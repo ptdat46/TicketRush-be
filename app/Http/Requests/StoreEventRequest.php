@@ -34,6 +34,8 @@ class StoreEventRequest extends FormRequest
             'bank_account_name' => ['nullable', 'string', 'max:255'],
             'master_width' => ['required', 'integer', 'min:1', 'max:1000'],
             'master_length' => ['required', 'integer', 'min:1', 'max:1000'],
+            'total_seats' => ['prohibited'],
+            'available_seats_count' => ['prohibited'],
         ];
     }
 }

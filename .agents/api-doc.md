@@ -676,7 +676,8 @@ Behavior:
 
 - If `limit` is provided, returns a plain array without pagination `meta`.
 - If `per_page` is used (or default), returns paginated response with `meta`.
-- `trending=1` automatically filters `on_sale` events with available seats and sorts by `tickets_sold_count` descending.
+- `ticket_status=on_sale`, `ticket_status=sold_out`, and homepage sold-out flags use cached `events.available_seats_count` for fast listing.
+- `trending=1` automatically filters `on_sale` events with cached available seats and sorts by `tickets_sold_count` descending.
 - Default order (without `trending`): `is_featured` desc → `sort_order` → `starts_at`.
 
 **Homepage section examples:**
@@ -750,7 +751,10 @@ Success response (with `limit` — no pagination):
       "is_sold_out": false,
       "ticket_sale_status": "on_sale",
       "display_type": "stadium",
+      "total_seats": 500,
+      "available_seats_count": 124,
       "is_featured": true,
+      "is_special": false,
       "organizer": {
         "id": 2,
         "name": "Tran Van B",
@@ -780,7 +784,10 @@ Success response (paginated — default or `per_page`):
       "is_sold_out": false,
       "ticket_sale_status": "on_sale",
       "display_type": "stadium",
+      "total_seats": 500,
+      "available_seats_count": 124,
       "is_featured": true,
+      "is_special": false,
       "organizer": {
         "id": 2,
         "name": "Tran Van B",
@@ -892,7 +899,8 @@ Response:
       "status": "pending",
       "display_type": "stadium",
       "master_width": 80,
-      "master_length": 60
+      "master_length": 60,
+      "total_seats": 0
     }
   ]
 }
@@ -952,11 +960,14 @@ Validation:
 | `display_type` | Yes | `rectangular`, `stadium` |
 | `master_width` | Yes | integer, min 1, max 1000 |
 | `master_length` | Yes | integer, min 1, max 1000 |
+| `total_seats` | No | prohibited; calculated from generated seats |
+| `available_seats_count` | No | prohibited; calculated from seat statuses |
 
 Behavior:
 
 - `organizer_id` is taken from authenticated user.
 - `status` is automatically set to `pending`.
+- `total_seats` and `available_seats_count` are calculated by the backend after seats are generated from zones.
 - Admin approval is required before the event appears publicly.
 
 Success response `201`:
@@ -989,7 +1000,8 @@ Success response `201`:
     "status": "pending",
     "display_type": "stadium",
     "master_width": 80,
-    "master_length": 60
+    "master_length": 60,
+    "total_seats": 0
   }
 }
 ```
@@ -1030,6 +1042,7 @@ Behavior:
 
 - Organizer can only update events owned by themselves.
 - After update, `status` is reset to `pending` for admin review again.
+- `total_seats` and `available_seats_count` cannot be edited directly; they are recalculated from generated seats and seat statuses.
 
 ### 7.5 Delete organizer event
 
@@ -1055,6 +1068,7 @@ Success response:
 Organizer zone APIs require Bearer token and role `organizer`.
 
 Each zone belongs to an event. When a seating zone (`is_seating = true`) is created, seats are automatically generated in a grid of `width × length`.
+After zone create/update/delete, the backend recalculates `events.total_seats` and `events.available_seats_count` from generated seats. `total_seats` is used as waiting room capacity, and `available_seats_count` is used for fast homepage filtering.
 
 #### 7.6.1 List zones
 
@@ -1252,7 +1266,7 @@ Behavior:
 
 - Returns paginated events for all organizers.
 - Includes `organizer` when loaded.
-- Includes `zones_count`, `seats_count`, and `available_seats_count`.
+- Includes `zones_count`, `seats_count`, `available_seats_count`, and cached `total_seats`.
 - Orders by newest created event first.
 
 ### 8.2 List pending events
@@ -1279,7 +1293,7 @@ GET /api/admin/events/{event}
 Behavior:
 
 - Admin can view any event regardless of organizer or status.
-- Includes `organizer`, `zones_count`, `seats_count`, and `available_seats_count`.
+- Includes `organizer`, `zones_count`, `seats_count`, `available_seats_count`, and cached `total_seats`.
 
 ### 8.4 Update allowed event information
 
@@ -1370,6 +1384,8 @@ Validation:
 | `display_type` | Prohibited | Admin cannot edit map type |
 | `master_width` | Prohibited | Admin cannot edit master map width |
 | `master_length` | Prohibited | Admin cannot edit master map length |
+| `total_seats` | Prohibited | Admin cannot edit cached seat capacity directly |
+| `available_seats_count` | Prohibited | Admin cannot edit cached available seat count directly |
 | `bank_name` | Prohibited | Admin cannot edit bank information |
 | `bank_account_number` | Prohibited | Admin cannot edit bank information |
 | `bank_account_name` | Prohibited | Admin cannot edit bank information |
@@ -1501,9 +1517,203 @@ Success response:
 
 Auth: Bearer token required. Role: `customer`.
 
-These APIs allow customers to lock seats, checkout selected seats, view their own paid orders, and list issued tickets.
+These APIs allow customers to enter the booking waiting room, lock seats, checkout selected seats, view their own paid orders, and list issued tickets.
 
-### 9.1 Lock selected seats
+Waiting room behavior:
+
+- Customers must join the waiting room before entering the booking/seat-map page.
+- At most `events.total_seats` customers can be `active` for one event at the same time.
+- Extra customers are placed in FIFO queue with `status = waiting`.
+- FE can listen to WebSocket channels for realtime updates and may keep polling the status endpoint as a fallback/heartbeat using `poll_after_seconds`.
+- Waiting room heartbeat TTL is 120 seconds. If FE stops polling, the entry can expire and its slot/position may be released.
+- Lock-seat and checkout APIs require the customer to have an active waiting-room turn.
+
+### 9.0 Realtime WebSocket channels
+
+Broadcasting uses Laravel Broadcasting with Reverb.
+
+Reverb package must be installed before `php artisan reverb:start` is available:
+
+```bash
+composer update laravel/reverb
+php artisan package:discover
+php artisan optimize:clear
+```
+
+Local backend processes:
+
+```bash
+php artisan serve
+php artisan queue:listen --tries=1
+php artisan reverb:start
+```
+
+The Composer `dev` script starts Reverb together with the API server.
+
+Broadcast auth endpoint:
+
+```txt
+POST /api/broadcasting/auth
+```
+
+Auth header:
+
+```txt
+Authorization: Bearer {token}
+```
+
+Private channels:
+
+| Channel | Who can listen | Purpose |
+|---|---|---|
+| `private-events.{eventId}.waiting-room` | Admin, event organizer, or customer currently waiting/active for the event | Public queue counters for the event |
+| `private-events.{eventId}.customers.{customerId}.waiting-room` | Same customer or admin | Private queue status for one customer |
+| `private-events.{eventId}.seats` | Admin, event organizer, or active customer for the event | Realtime seat map status |
+
+Events:
+
+| Event | Channel | Payload |
+|---|---|---|
+| `.waiting-room.summary.updated` | `private-events.{eventId}.waiting-room` | `event_id`, `waiting_count`, `active_count`, `capacity`, `updated_at` |
+| `.waiting-room.entry.updated` | `private-events.{eventId}.customers.{customerId}.waiting-room` | Full waiting-room entry payload, including `status`, `position`, `can_enter_booking` |
+| `.seat.status.updated` | `private-events.{eventId}.seats` | Changed seats with `id`, `zone_id`, `row_index`, `col_index`, `status`, `locked_until` |
+
+FE flow:
+
+- On waiting page, subscribe to both waiting-room channels.
+- Update queue count from `.waiting-room.summary.updated`.
+- Update the current user's position from `.waiting-room.entry.updated`.
+- Redirect to seat map when `.waiting-room.entry.updated` has `can_enter_booking = true`.
+- On seat map, subscribe to `private-events.{eventId}.seats` and patch only changed seats from `.seat.status.updated`.
+
+Example seat event:
+
+```json
+{
+  "event_id": 1,
+  "seats": [
+    {
+      "id": 10,
+      "zone_id": 2,
+      "row_index": 1,
+      "col_index": 4,
+      "status": "locked",
+      "locked_at": "2026-05-21T10:05:00+07:00",
+      "locked_until": "2026-05-21T10:15:00+07:00",
+      "updated_at": "2026-05-21T10:05:00+07:00"
+    }
+  ],
+  "updated_at": "2026-05-21T10:05:00+07:00"
+}
+```
+
+### 9.1 Join waiting room
+
+```txt
+POST /api/customer/events/{event}/waiting-room
+```
+
+Behavior:
+
+- Event must be `approved`.
+- Ticket sale window must be open.
+- Event must have at least one sellable generated seat.
+- If active customers are fewer than `total_seats` and nobody is waiting, the customer receives `status = active`.
+- Otherwise the customer receives `status = waiting` with queue position.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "You are in the waiting room.",
+  "data": {
+    "id": 10,
+    "event_id": 1,
+    "customer_id": 5,
+    "status": "waiting",
+    "can_enter_booking": false,
+    "position": 105,
+    "people_ahead": 104,
+    "waiting_count": 180,
+    "active_count": 500,
+    "capacity": 500,
+    "estimated_wait_seconds": 208,
+    "poll_after_seconds": 5,
+    "heartbeat_ttl_seconds": 120,
+    "joined_at": "2026-05-21T10:00:00+07:00",
+    "admitted_at": null,
+    "last_seen_at": "2026-05-21T10:00:00+07:00"
+  }
+}
+```
+
+When admitted:
+
+```json
+{
+  "success": true,
+  "message": "You can enter the booking page now.",
+  "data": {
+    "status": "active",
+    "can_enter_booking": true,
+    "position": null,
+    "people_ahead": 0,
+    "active_count": 499,
+    "capacity": 500,
+    "poll_after_seconds": 5,
+    "heartbeat_ttl_seconds": 120
+  }
+}
+```
+
+### 9.2 Check waiting room status
+
+```txt
+GET /api/customer/events/{event}/waiting-room
+```
+
+Behavior:
+
+- Returns the current customer waiting-room entry.
+- Also acts as heartbeat for `active` and `waiting` entries.
+- Promotes waiting customers when active slots are available.
+
+Common errors:
+
+```json
+{
+  "success": false,
+  "message": "Please join the waiting room before checking status.",
+  "errors": null
+}
+```
+
+### 9.3 Leave waiting room
+
+```txt
+DELETE /api/customer/events/{event}/waiting-room
+```
+
+Behavior:
+
+- Marks the customer's entry as `left`.
+- Frees an active slot and promotes the next waiting customer when possible.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "You have left the waiting room.",
+  "data": {
+    "status": "left",
+    "can_enter_booking": false
+  }
+}
+```
+
+### 9.4 Lock selected seats
 
 ```txt
 POST /api/customer/events/{event}/seats/lock
@@ -1528,6 +1738,7 @@ Behavior:
 
 - Event must be `approved`.
 - Ticket sale window must be open.
+- Customer must have an active waiting-room turn for this event.
 - Seats must belong to the event.
 - Seats must be `available`, or already locked by the same customer.
 - Seats locked by another customer return `409`.
@@ -1572,7 +1783,17 @@ Seat conflict `409`:
 }
 ```
 
-### 9.2 Release selected seats
+Waiting-room turn required `409`:
+
+```json
+{
+  "success": false,
+  "message": "Please wait until your queue turn before booking this event.",
+  "errors": null
+}
+```
+
+### 9.5 Release selected seats
 
 ```txt
 DELETE /api/customer/events/{event}/seats/lock
@@ -1591,7 +1812,7 @@ Behavior:
 - Releases only seats currently locked by the authenticated customer.
 - Returned seats will have `status = available` if released.
 
-### 9.3 Checkout locked seats
+### 9.6 Checkout locked seats
 
 ```txt
 POST /api/customer/events/{event}/orders
@@ -1619,6 +1840,7 @@ Validation:
 Behavior:
 
 - Customer must lock every selected seat before checkout.
+- Customer must have an active waiting-room turn for this event.
 - Locks must still be active and owned by the authenticated customer.
 - Creates a paid order immediately for the mock payment flow.
 - Creates one ticket per selected seat.
@@ -1664,7 +1886,7 @@ Checkout without active lock `409`:
 }
 ```
 
-### 9.4 List customer orders
+### 9.7 List customer orders
 
 ```txt
 GET /api/customer/orders
@@ -1712,7 +1934,7 @@ Success response:
 }
 ```
 
-### 9.5 Show customer order
+### 9.8 Show customer order
 
 ```txt
 GET /api/customer/orders/{order}
@@ -1761,7 +1983,7 @@ Success response:
 }
 ```
 
-### 9.6 List customer tickets
+### 9.9 List customer tickets
 
 ```txt
 GET /api/customer/tickets
@@ -1840,7 +2062,7 @@ Success response:
 }
 ```
 
-### 9.7 Show customer ticket
+### 9.10 Show customer ticket
 
 ```txt
 GET /api/customer/tickets/{ticket}

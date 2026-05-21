@@ -29,6 +29,8 @@ class Event extends Model
         'display_type',
         'master_width',
         'master_length',
+        'total_seats',
+        'available_seats_count',
         'ticket_sale_starts_at',
         'ticket_sale_ends_at',
         'bank_name',
@@ -44,6 +46,8 @@ class Event extends Model
         'sort_order' => 'integer',
         'master_width' => 'integer',
         'master_length' => 'integer',
+        'total_seats' => 'integer',
+        'available_seats_count' => 'integer',
         'ticket_sale_starts_at' => 'datetime',
         'ticket_sale_ends_at' => 'datetime',
     ];
@@ -66,6 +70,11 @@ class Event extends Model
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
+    }
+
+    public function waitingRoomEntries(): HasMany
+    {
+        return $this->hasMany(EventWaitingRoomEntry::class);
     }
 
     public function seats(): HasManyThrough

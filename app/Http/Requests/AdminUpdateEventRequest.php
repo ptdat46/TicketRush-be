@@ -32,6 +32,8 @@ class AdminUpdateEventRequest extends FormRequest
             'display_type' => ['prohibited'],
             'master_width' => ['prohibited'],
             'master_length' => ['prohibited'],
+            'total_seats' => ['prohibited'],
+            'available_seats_count' => ['prohibited'],
             'bank_name' => ['prohibited'],
             'bank_account_number' => ['prohibited'],
             'bank_account_name' => ['prohibited'],

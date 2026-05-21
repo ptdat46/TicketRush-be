@@ -7,8 +7,9 @@ use App\Http\Requests\StoreZoneRequest;
 use App\Http\Requests\UpdateZoneRequest;
 use App\Http\Resources\ZoneResource;
 use App\Models\Event;
-use App\Models\Seat;
 use App\Models\Zone;
+use App\Services\EventSeatCounterService;
+use App\Services\ZoneSeatGeneratorService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -40,8 +41,12 @@ class OrganizerZoneController extends Controller
         ]);
     }
 
-    public function store(StoreZoneRequest $request, Event $event): JsonResponse
-    {
+    public function store(
+        StoreZoneRequest $request,
+        Event $event,
+        EventSeatCounterService $seatCounter,
+        ZoneSeatGeneratorService $seatGenerator,
+    ): JsonResponse {
         if ($error = $this->ensureOwnership($request, $event)) {
             return $error;
         }
@@ -52,9 +57,8 @@ class OrganizerZoneController extends Controller
 
         $zone = Zone::create($data);
 
-        if ($zone->is_seating) {
-            $this->generateSeats($zone);
-        }
+        $seatGenerator->generateForZone($zone);
+        $seatCounter->sync($event);
 
         return response()->json([
             'success' => true,
@@ -82,7 +86,7 @@ class OrganizerZoneController extends Controller
         ]);
     }
 
-    public function update(UpdateZoneRequest $request, Event $event, Zone $zone): JsonResponse
+    public function update(UpdateZoneRequest $request, Event $event, Zone $zone, EventSeatCounterService $seatCounter): JsonResponse
     {
         if ($error = $this->ensureOwnership($request, $event)) {
             return $error;
@@ -96,6 +100,7 @@ class OrganizerZoneController extends Controller
         }
 
         $zone->update($request->validated());
+        $seatCounter->sync($event);
 
         return response()->json([
             'success' => true,
@@ -104,7 +109,7 @@ class OrganizerZoneController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Event $event, Zone $zone): JsonResponse
+    public function destroy(Request $request, Event $event, Zone $zone, EventSeatCounterService $seatCounter): JsonResponse
     {
         if ($error = $this->ensureOwnership($request, $event)) {
             return $error;
@@ -118,30 +123,11 @@ class OrganizerZoneController extends Controller
         }
 
         $zone->delete();
+        $seatCounter->sync($event);
 
         return response()->json([
             'success' => true,
             'message' => 'Zone deleted successfully.',
         ]);
-    }
-
-    private function generateSeats(Zone $zone): void
-    {
-        $seats = [];
-
-        for ($row = 0; $row < $zone->length; $row++) {
-            for ($col = 0; $col < $zone->width; $col++) {
-                $seats[] = [
-                    'zone_id' => $zone->id,
-                    'row_index' => $row,
-                    'col_index' => $col,
-                    'status' => 'available',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-        }
-
-        Seat::insert($seats);
     }
 }

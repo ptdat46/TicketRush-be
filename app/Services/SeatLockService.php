@@ -14,6 +14,12 @@ class SeatLockService
 {
     private const LOCK_MINUTES = 10;
 
+    public function __construct(
+        private readonly WaitingRoomService $waitingRoomService,
+        private readonly SeatRealtimeService $seatRealtimeService,
+        private readonly EventSeatCounterService $seatCounter,
+    ) {}
+
     public function lockMinutes(): int
     {
         return self::LOCK_MINUTES;
@@ -21,10 +27,16 @@ class SeatLockService
 
     public function lockSeats(Event $event, User $customer, array $seatIds): Collection
     {
-        $this->ensureEventCanSellTickets($event);
+        $this->waitingRoomService->ensureActiveAccess($event, $customer);
+        $this->ensureEventSaleWindowIsOpen($event);
         $this->releaseExpiredLocks($event);
+        $event->refresh();
 
-        return DB::transaction(function () use ($event, $customer, $seatIds): Collection {
+        if ($event->isSoldOut()) {
+            throw new ApiProblemException('Ticket sale is not currently open for this event.', 422);
+        }
+
+        $seats = DB::transaction(function () use ($event, $customer, $seatIds): Collection {
             $seats = $this->queryEventSeats($event, $seatIds)
                 ->lockForUpdate()
                 ->get();
@@ -48,6 +60,8 @@ class SeatLockService
                 }
             }
 
+            $availableSeatsCount = $seats->where('status', 'available')->count();
+
             Seat::query()
                 ->whereIn('id', $seats->pluck('id'))
                 ->update([
@@ -56,13 +70,19 @@ class SeatLockService
                     'locked_at' => now(),
                 ]);
 
+            $this->seatCounter->decrementAvailable($event, $availableSeatsCount);
+
             return $this->queryEventSeats($event, $seatIds)->get();
         });
+
+        $this->seatRealtimeService->broadcastSeats($seats);
+
+        return $seats;
     }
 
     public function releaseSeats(Event $event, User $customer, array $seatIds): Collection
     {
-        return DB::transaction(function () use ($event, $customer, $seatIds): Collection {
+        $seats = DB::transaction(function () use ($event, $customer, $seatIds): Collection {
             $seats = $this->queryEventSeats($event, $seatIds)
                 ->where('locked_by', $customer->id)
                 ->where('status', 'locked')
@@ -77,21 +97,45 @@ class SeatLockService
                     'locked_at' => null,
                 ]);
 
+            $this->seatCounter->incrementAvailable($event, $seats->count());
+
             return $this->queryEventSeats($event, $seatIds)->get();
         });
+
+        $this->seatRealtimeService->broadcastSeats($seats);
+
+        return $seats;
     }
 
     public function releaseExpiredLocks(?Event $event = null): void
     {
-        Seat::query()
+        $seats = Seat::query()
+            ->with('zone')
             ->when($event !== null, fn ($query) => $query->whereHas('zone', fn ($query) => $query->where('event_id', $event->id)))
             ->where('status', 'locked')
             ->where('locked_at', '<=', now()->subMinutes(self::LOCK_MINUTES))
+            ->get();
+
+        if ($seats->isEmpty()) {
+            return;
+        }
+
+        Seat::query()
+            ->whereIn('id', $seats->pluck('id'))
             ->update([
                 'status' => 'available',
                 'locked_by' => null,
                 'locked_at' => null,
             ]);
+
+        $this->seatCounter->incrementAvailableForSeats($seats);
+
+        $this->seatRealtimeService->broadcastSeats(
+            Seat::query()
+                ->with('zone')
+                ->whereIn('id', $seats->pluck('id'))
+                ->get()
+        );
     }
 
     public function ensureEventCanSellTickets(Event $event): void

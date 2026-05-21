@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Events\EventSeatStatusUpdated;
+use App\Events\EventWaitingRoomEntryUpdated;
+use App\Events\EventWaitingRoomSummaryUpdated;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\Seat;
@@ -9,6 +12,7 @@ use App\Models\Ticket;
 use App\Models\User;
 use App\Models\Zone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Tests\TestCase;
 
 class CustomerBookingApiTest extends TestCase
@@ -19,6 +23,10 @@ class CustomerBookingApiTest extends TestCase
     {
         [$event, $seats] = $this->createApprovedEventWithSeats();
         $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
 
         $response = $this->actingAs($customer, 'sanctum')
             ->postJson("/api/customer/events/{$event->id}/seats/lock", [
@@ -42,6 +50,10 @@ class CustomerBookingApiTest extends TestCase
         $customer = User::factory()->create(['role' => 'customer']);
         $otherCustomer = User::factory()->create(['role' => 'customer']);
 
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
         $seats[0]->update([
             'status' => 'locked',
             'locked_by' => $otherCustomer->id,
@@ -61,6 +73,10 @@ class CustomerBookingApiTest extends TestCase
     {
         [$event, $seats] = $this->createApprovedEventWithSeats();
         $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
 
         $this->actingAs($customer, 'sanctum')
             ->postJson("/api/customer/events/{$event->id}/seats/lock", [
@@ -98,6 +114,10 @@ class CustomerBookingApiTest extends TestCase
         [$event, $seats] = $this->createApprovedEventWithSeats();
         $customer = User::factory()->create(['role' => 'customer']);
 
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
         $response = $this->actingAs($customer, 'sanctum')
             ->postJson("/api/customer/events/{$event->id}/orders", [
                 'seat_ids' => [$seats[0]->id],
@@ -106,6 +126,111 @@ class CustomerBookingApiTest extends TestCase
 
         $response->assertStatus(409)
             ->assertJsonPath('message', 'Please lock all selected seats before checkout.');
+    }
+
+    public function test_customer_must_wait_for_booking_turn_before_locking_seats(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(1);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $response = $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('message', 'Please wait until your queue turn before booking this event.');
+    }
+
+    public function test_waiting_room_limits_active_customers_to_total_event_seats(): void
+    {
+        EventFacade::fake([
+            EventWaitingRoomEntryUpdated::class,
+            EventWaitingRoomSummaryUpdated::class,
+        ]);
+
+        [$event] = $this->createApprovedEventWithSeats(1);
+        $firstCustomer = User::factory()->create(['role' => 'customer']);
+        $secondCustomer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($firstCustomer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.can_enter_booking', true)
+            ->assertJsonPath('data.capacity', 1);
+
+        $this->joinWaitingRoom($secondCustomer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'waiting')
+            ->assertJsonPath('data.can_enter_booking', false)
+            ->assertJsonPath('data.position', 1)
+            ->assertJsonPath('data.waiting_count', 1);
+
+        $this->actingAs($firstCustomer, 'sanctum')
+            ->deleteJson("/api/customer/events/{$event->id}/waiting-room")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'left');
+
+        $this->actingAs($secondCustomer, 'sanctum')
+            ->getJson("/api/customer/events/{$event->id}/waiting-room")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.can_enter_booking', true);
+
+        EventFacade::assertDispatched(EventWaitingRoomSummaryUpdated::class);
+        EventFacade::assertDispatched(EventWaitingRoomEntryUpdated::class);
+    }
+
+    public function test_locking_seats_broadcasts_seat_status_updates(): void
+    {
+        EventFacade::fake([EventSeatStatusUpdated::class]);
+
+        [$event, $seats] = $this->createApprovedEventWithSeats(1);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        EventFacade::assertDispatched(EventSeatStatusUpdated::class);
+    }
+
+    public function test_lock_and_release_keep_event_available_seats_count_in_sync(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(2);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('events', [
+            'id' => $event->id,
+            'available_seats_count' => 1,
+        ]);
+
+        $this->actingAs($customer, 'sanctum')
+            ->deleteJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('events', [
+            'id' => $event->id,
+            'available_seats_count' => 2,
+        ]);
     }
 
     public function test_customer_can_filter_tickets_by_valid_used_and_expired_status(): void
@@ -161,6 +286,8 @@ class CustomerBookingApiTest extends TestCase
             'display_type' => 'rectangular',
             'master_width' => 20,
             'master_length' => 30,
+            'total_seats' => $seatCount,
+            'available_seats_count' => $seatCount,
             'ticket_sale_starts_at' => now()->subDay(),
             'ticket_sale_ends_at' => now()->addDays(5),
         ]);
@@ -186,6 +313,12 @@ class CustomerBookingApiTest extends TestCase
             ]));
 
         return [$event, $seats->values()];
+    }
+
+    private function joinWaitingRoom(User $customer, Event $event)
+    {
+        return $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/waiting-room");
     }
 
     private function createTicketForCustomer(User $customer, array $eventOverrides = [], array $ticketOverrides = []): Ticket

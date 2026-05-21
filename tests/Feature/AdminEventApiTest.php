@@ -102,10 +102,12 @@ class AdminEventApiTest extends TestCase
                 'bank_name' => 'Changed Bank',
                 'display_type' => 'stadium',
                 'master_width' => 99,
+                'total_seats' => 999,
+                'available_seats_count' => 999,
             ]);
 
         $response->assertStatus(422)
-            ->assertJsonValidationErrors(['bank_name', 'display_type', 'master_width']);
+            ->assertJsonValidationErrors(['bank_name', 'display_type', 'master_width', 'total_seats', 'available_seats_count']);
 
         $event->refresh();
 

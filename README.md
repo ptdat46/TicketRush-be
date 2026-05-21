@@ -19,6 +19,14 @@
 composer install
 ```
 
+Neu vua them realtime WebSocket/Reverb hoac gap loi `There are no commands defined in the "reverb" namespace`, hay cap nhat lock file va cai package Reverb:
+
+```bash
+composer update laravel/reverb
+php artisan package:discover
+php artisan optimize:clear
+```
+
 2. Cài thư viện frontend:
 
 ```bash
@@ -96,6 +104,38 @@ Nếu cổng `8000` đã được dùng:
 
 ```bash
 php artisan serve --port=8001
+```
+
+### Chay WebSocket realtime
+
+Realtime waiting room va seat map dung Laravel Reverb. Sau khi da cai package bang `composer update laravel/reverb`, dam bao `.env` co cac bien:
+
+```env
+BROADCAST_CONNECTION=reverb
+REVERB_APP_ID=ticketrush-local
+REVERB_APP_KEY=ticketrush-local-key
+REVERB_APP_SECRET=ticketrush-local-secret
+REVERB_HOST=127.0.0.1
+REVERB_PORT=8080
+REVERB_SCHEME=http
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+REVERB_ALLOWED_ORIGINS=*
+```
+
+Chay Reverb:
+
+```bash
+php artisan reverb:start
+```
+
+Neu command van chua co, chay lai:
+
+```bash
+composer update laravel/reverb
+php artisan package:discover
+php artisan optimize:clear
+php artisan list reverb
 ```
 
 ### Build frontend assets

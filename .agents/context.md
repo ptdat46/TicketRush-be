@@ -6,6 +6,7 @@ TicketRush là nền tảng phân phối vé điện tử cho sự kiện, tập
 
 - **Trải nghiệm chọn ghế trực quan**: Người dùng xem sơ đồ ghế theo từng khu vực và chọn ghế trực tiếp trên map.
 - **Xử lý tranh chấp dữ liệu cao**: Đảm bảo một ghế không bị nhiều người mua cùng lúc trong các đợt mở bán cao điểm.
+- **Hàng chờ mua vé**: Giới hạn số customer vào trang mua vé đồng thời theo tổng số ghế bán được của event, phần còn lại vào queue và được cập nhật vị trí chờ.
 - **Quản trị sự kiện linh hoạt**: Organizer có thể tạo sự kiện, thiết kế sơ đồ, quản lý vé và xem thống kê.
 - **Vé điện tử QR Code**: Sau khi thanh toán thành công, hệ thống phát hành vé QR cho khách hàng.
 
@@ -51,6 +52,8 @@ Mỗi sự kiện có một bản đồ tổng thể với các thông tin:
   - `stadium`: Sơ đồ sân vận động.
 - **master_width**: Chiều rộng tổng theo đơn vị ô lưới.
 - **master_length**: Chiều dài tổng theo đơn vị ô lưới.
+- **total_seats**: Tổng số ghế bán được đã sinh từ seating zones, dùng làm capacity cho hàng chờ mua vé.
+- **available_seats_count**: Tổng số ghế đang `available`, được cache để trang chủ/filter không phải count bảng seats nhiều lần.
 
 ### Zones
 
@@ -94,14 +97,18 @@ Ghế được tự động sinh dựa trên kích thước của từng zone c�
 
 ### Đặt vé
 
-1. Customer xem sơ đồ sự kiện.
-2. Customer chọn ghế còn `available`.
-3. Hệ thống lock ghế trong 10 phút bằng `status = locked`, `locked_by`, `locked_at`.
-4. Customer checkout các ghế đã lock bằng mock payment.
-5. Hệ thống tạo paid order, ticket QR và chuyển ghế sang `sold`.
-6. Checkout chỉ thành công nếu tất cả ghế được chọn đang được chính customer lock và lock chưa hết hạn.
-7. Vé đã bán không hỗ trợ hoàn tiền.
-8. Vé hiển thị cho customer có trạng thái dẫn xuất:
+1. Customer vào waiting room của sự kiện trước khi mở trang chọn ghế.
+2. Số customer được vào trang mua vé đồng thời tối đa bằng `events.total_seats`.
+3. Nếu vượt capacity, customer có trạng thái `waiting`, FE nghe WebSocket hoặc poll API để cập nhật `position`, `waiting_count` và tự chuyển sang chọn ghế khi `can_enter_booking = true`.
+4. Customer chỉ được lock ghế hoặc checkout khi waiting-room entry đang `active`.
+5. Customer xem sơ đồ sự kiện.
+6. Customer chọn ghế còn `available`.
+7. Hệ thống lock ghế trong 10 phút bằng `status = locked`, `locked_by`, `locked_at`.
+8. Customer checkout các ghế đã lock bằng mock payment.
+9. Hệ thống tạo paid order, ticket QR và chuyển ghế sang `sold`.
+10. Checkout chỉ thành công nếu tất cả ghế được chọn đang được chính customer lock và lock chưa hết hạn.
+11. Vé đã bán không hỗ trợ hoàn tiền.
+12. Vé hiển thị cho customer có trạng thái dẫn xuất:
    - `valid`: ticket còn hiệu lực, event chưa kết thúc.
    - `used`: ticket đã check-in.
    - `expired`: ticket vẫn `valid` trong DB nhưng event đã kết thúc.
@@ -187,6 +194,20 @@ Lưu thông tin sự kiện và cấu hình map.
 - `bank_name`
 - `bank_account_number`
 - `bank_account_name`
+- `total_seats`
+- `available_seats_count`
+
+### event_waiting_room_entries
+
+Lưu lượt vào hàng chờ mua vé của customer theo từng event.
+
+- `event_id`
+- `customer_id`
+- `status`: `waiting`, `active`, `left`, `expired`
+- `joined_at`
+- `admitted_at`
+- `last_seen_at`
+- `left_at`
 
 ### zones
 
@@ -269,10 +290,24 @@ Lưu vé điện tử QR Code.
 ### Transaction và concurrency
 
 - Luồng giữ ghế và thanh toán bắt buộc dùng `DB::transaction()`.
+- Luồng vào hàng chờ phải dùng transaction và khóa event row để giữ FIFO/capacity ổn định.
 - Khi chọn ghế phải query bằng `lockForUpdate()`.
 - Không update trạng thái ghế ngoài transaction.
 - Tạo order, tickets và cập nhật seats phải nằm trong cùng transaction khi xác nhận thanh toán.
 - Luôn kiểm tra lại trạng thái ghế ngay trước khi chuyển sang `sold`.
+
+### Realtime WebSocket
+
+- Dùng Laravel Broadcasting/Reverb cho realtime.
+- Waiting room broadcast:
+  - Channel tổng event: `private-events.{eventId}.waiting-room`.
+  - Channel riêng customer: `private-events.{eventId}.customers.{customerId}.waiting-room`.
+  - Event tổng: `.waiting-room.summary.updated`.
+  - Event riêng: `.waiting-room.entry.updated`.
+- Seat map broadcast:
+  - Channel: `private-events.{eventId}.seats`.
+  - Event: `.seat.status.updated`.
+- FE vẫn nên giữ heartbeat/poll nhẹ cho waiting room để tránh entry hết hạn khi mất kết nối WebSocket.
 
 ### Queue, Job và Scheduler
 
@@ -306,14 +341,20 @@ Khi lỗi:
 }
 ```
 
+Các lỗi nghiệp vụ chủ động nên throw `ApiProblemException`; Laravel exception handler trong `bootstrap/app.php` sẽ render JSON lỗi thống nhất để controller không phải lặp `try/catch`.
+Các response dùng lại nhiều nên đi qua `App\Support\ApiResponse` thay vì viết lại mảng `success/message/errors` ở nhiều nơi.
+
 ### Eloquent và hiệu năng query
 
 - Luôn eager load quan hệ thường dùng bằng `with()`.
 - Tránh N+1 query khi load event map: event -> zones -> seats.
 - Chỉ select các trường cần thiết khi render map.
+- Trang chủ/public event listing dùng `events.total_seats` và `events.available_seats_count` đã cache, không count trực tiếp bảng `seats` cho mỗi request.
 - Thêm index cho các cột lọc nhiều:
   - `events.status`
   - `events.organizer_id`
+  - `events.total_seats`
+  - `events.available_seats_count`
   - `zones.event_id`
   - `seats.status`
   - `seats.locked_at`
@@ -396,6 +437,7 @@ Cần ưu tiên test các luồng rủi ro cao:
 
 - Browse events.
 - View event detail and seat map.
+- Join/poll/leave event waiting room.
 - Lock seats.
 - Checkout.
 - View orders and tickets.
@@ -413,6 +455,7 @@ Cần ưu tiên test các luồng rủi ro cao:
 
 - Vé đã bán không được hoàn tiền.
 - Ghế chỉ được giữ tối đa 10 phút.
+- Số customer được active trong trang mua vé của một event không vượt quá `events.total_seats`; customer còn lại phải ở waiting room.
 - Chỉ event đã được duyệt mới được bán vé.
 - Một seat chỉ được gắn với tối đa một ticket hợp lệ.
 - Một ticket chỉ được check-in một lần.

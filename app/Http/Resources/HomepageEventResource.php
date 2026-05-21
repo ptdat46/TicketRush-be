@@ -24,6 +24,8 @@ class HomepageEventResource extends JsonResource
             'is_sold_out' => $this->isSoldOut(),
             'ticket_sale_status' => $this->ticketSaleStatus(),
             'display_type' => $this->display_type,
+            'total_seats' => $this->total_seats,
+            'available_seats_count' => $this->available_seats_count,
             'is_featured' => (bool) $this->is_featured,
             'is_special' => (bool) $this->is_special,
             'organizer' => $this->whenLoaded('organizer', fn () => [

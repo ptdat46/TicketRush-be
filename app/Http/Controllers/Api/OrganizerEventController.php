@@ -3,28 +3,27 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\OrganizerEventIndexRequest;
 use App\Http\Requests\StoreEventRequest;
 use App\Http\Requests\UpdateEventRequest;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
+use App\Repositories\OrganizerEventRepository;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class OrganizerEventController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
-    {
-        $events = Event::query()
-            ->where('organizer_id', $request->user()->id)
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')))
-            ->when($request->filled('category'), fn ($query) => $query->where('category', $request->string('category')))
-            ->when($request->filled('starts_after'), fn ($query) => $query->where('starts_at', '>=', $request->date('starts_after')))
-            ->when($request->filled('starts_before'), fn ($query) => $query->where('starts_at', '<=', $request->date('starts_before')))
-            ->latest()
-            ->paginate((int) $request->integer('per_page', 12));
+    public function __construct(
+        private readonly OrganizerEventRepository $events,
+    ) {}
 
-        return EventResource::collection($events);
+    public function index(OrganizerEventIndexRequest $request): AnonymousResourceCollection
+    {
+        return EventResource::collection(
+            $this->events->paginateForOrganizer($request->user(), $request->filters())
+        );
     }
 
     public function store(StoreEventRequest $request): JsonResponse

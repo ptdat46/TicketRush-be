@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerOrderController;
 use App\Http\Controllers\Api\CustomerSeatLockController;
 use App\Http\Controllers\Api\CustomerTicketController;
+use App\Http\Controllers\Api\CustomerWaitingRoomController;
 use App\Http\Controllers\Api\OrganizerEventController;
 use App\Http\Controllers\Api\OrganizerZoneController;
 use App\Http\Controllers\Api\PublicEventController;
@@ -60,6 +61,9 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
             'message' => 'Customer access granted.',
         ]));
 
+        Route::post('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'store']);
+        Route::get('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'show']);
+        Route::delete('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'destroy']);
         Route::post('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'store']);
         Route::delete('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'destroy']);
         Route::post('/customer/events/{event}/orders', [CustomerOrderController::class, 'store']);
