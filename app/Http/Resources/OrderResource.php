@@ -28,6 +28,7 @@ class OrderResource extends JsonResource
             'paid_at' => $this->paid_at?->toIso8601String(),
             'expires_at' => $this->expires_at?->toIso8601String(),
             'ticket_count' => $this->whenCounted('tickets'),
+            'tickets' => TicketResource::collection($this->whenLoaded('tickets')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

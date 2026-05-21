@@ -14,6 +14,8 @@ class TicketResource extends JsonResource
             'ticket_code' => $this->ticket_code,
             'qr_code' => $this->qr_code,
             'status' => $this->status,
+            'display_status' => $this->displayStatus(),
+            'is_expired' => $this->isExpired(),
             'issued_at' => $this->issued_at?->toIso8601String(),
             'checked_in_at' => $this->checked_in_at?->toIso8601String(),
             'event' => $this->whenLoaded('event', fn () => [
@@ -21,6 +23,7 @@ class TicketResource extends JsonResource
                 'name' => $this->event->name,
                 'thumbnail_url' => $this->event->thumbnail_url,
                 'starts_at' => $this->event->starts_at?->toIso8601String(),
+                'ends_at' => $this->event->ends_at?->toIso8601String(),
                 'venue' => $this->event->venue,
             ]),
             'seat' => $this->whenLoaded('seat', fn () => [

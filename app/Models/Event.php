@@ -94,6 +94,10 @@ class Event extends Model
 
     public function isSoldOut(): bool
     {
+        if (array_key_exists('available_seats_count', $this->attributes)) {
+            return (int) $this->attributes['available_seats_count'] === 0;
+        }
+
         $availableCount = $this->seats()->where('status', 'available')->count();
 
         return $availableCount === 0;

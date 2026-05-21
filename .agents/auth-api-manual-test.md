@@ -105,6 +105,20 @@ All require `Authorization: Bearer <token>`.
 - `GET /api/organizer/ping`: only `organizer`
 - `GET /api/customer/ping`: only `customer`
 
+After logging in with the seeded admin account, reuse the returned token to test admin event APIs:
+
+- `GET /api/admin/events`
+- `GET /api/admin/events/pending`
+- `PATCH /api/admin/events/{event}/review`
+- `PATCH /api/admin/events/{event}/homepage`
+
+After logging in with a seeded customer account, reuse the returned token to test customer booking APIs:
+
+- `POST /api/customer/events/{event}/seats/lock`
+- `DELETE /api/customer/events/{event}/seats/lock`
+- `POST /api/customer/events/{event}/orders`
+- `GET /api/customer/tickets?status=valid`
+
 ## 10. Required commands before manual test
 
 ```powershell

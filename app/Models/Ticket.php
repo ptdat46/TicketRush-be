@@ -46,4 +46,26 @@ class Ticket extends Model
     {
         return $this->belongsTo(User::class, 'customer_id');
     }
+
+    public function displayStatus(): string
+    {
+        if ($this->status === 'used') {
+            return 'used';
+        }
+
+        if ($this->status === 'void') {
+            return 'void';
+        }
+
+        if ($this->event?->ends_at && now()->gt($this->event->ends_at)) {
+            return 'expired';
+        }
+
+        return 'valid';
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->displayStatus() === 'expired';
+    }
 }

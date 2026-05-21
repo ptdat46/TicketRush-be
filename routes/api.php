@@ -1,13 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\OrganizerEventController;
-use App\Http\Controllers\Api\PublicEventController;
-use App\Http\Controllers\Api\CustomerOrderController;
-use App\Http\Controllers\Api\CustomerTicketController;
 use App\Http\Controllers\Api\AdminEventController;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CustomerOrderController;
+use App\Http\Controllers\Api\CustomerSeatLockController;
+use App\Http\Controllers\Api\CustomerTicketController;
+use App\Http\Controllers\Api\OrganizerEventController;
 use App\Http\Controllers\Api\OrganizerZoneController;
+use App\Http\Controllers\Api\PublicEventController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/events', [PublicEventController::class, 'index']);
 Route::get('/events/{event}', [PublicEventController::class, 'show']);
@@ -30,7 +31,12 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
             'message' => 'Admin access granted.',
         ]));
 
+        Route::get('/admin/events', [AdminEventController::class, 'index']);
+        Route::get('/admin/events/pending', [AdminEventController::class, 'pending']);
+        Route::get('/admin/events/{event}', [AdminEventController::class, 'show']);
         Route::put('/admin/events/{event}', [AdminEventController::class, 'update']);
+        Route::patch('/admin/events/{event}/review', [AdminEventController::class, 'review']);
+        Route::patch('/admin/events/{event}/homepage', [AdminEventController::class, 'homepage']);
     });
 
     Route::middleware(['role:organizer'])->group(function (): void {
@@ -54,6 +60,9 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
             'message' => 'Customer access granted.',
         ]));
 
+        Route::post('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'store']);
+        Route::delete('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'destroy']);
+        Route::post('/customer/events/{event}/orders', [CustomerOrderController::class, 'store']);
         Route::apiResource('/customer/orders', CustomerOrderController::class)->only(['index', 'show']);
         Route::apiResource('/customer/tickets', CustomerTicketController::class)->only(['index', 'show']);
     });

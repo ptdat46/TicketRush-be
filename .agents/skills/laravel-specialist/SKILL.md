@@ -48,6 +48,7 @@ Load detailed guidance based on context:
 - Write comprehensive tests (>85% coverage)
 - Use service containers and dependency injection
 - Follow PSR-12 coding standards
+- Update api-doc.md, context.md and references when adding, editing or removing features.
 
 ### MUST NOT DO
 - Use raw queries without protection (SQL injection)

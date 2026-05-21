@@ -1221,17 +1221,92 @@ Success response:
 
 Admin event APIs require Bearer token and role `admin`.
 
-Admin can update any event field, including `status` (approve/reject) and `is_special` (mark as special).
+Admin can list events, review pending events, update allowed event information, and configure homepage placement.
 
-### 8.1 Update event (approve / reject / mark special)
+Admin cannot update event bank information, master map configuration, zone count, zones, or zone prices through admin event update APIs.
+
+### 8.1 List events
+
+```txt
+GET /api/admin/events
+```
+
+Query parameters:
+
+| Name | Required | Rule | Description |
+|---|---:|---|---|
+| `status` | No | `pending`, `approved`, `rejected` | Filter by approval status |
+| `category` | No | string | Filter by category key |
+| `is_featured` | No | boolean | Filter homepage featured events |
+| `is_special` | No | boolean | Filter special events |
+| `search` | No | string, max 255 | Search by event `name` or `venue` |
+| `per_page` | No | integer, min 1, max 100 | Page size, default 12 |
+
+Example:
+
+```txt
+GET /api/admin/events?status=approved&category=dj&is_featured=true&per_page=12
+```
+
+Behavior:
+
+- Returns paginated events for all organizers.
+- Includes `organizer` when loaded.
+- Includes `zones_count`, `seats_count`, and `available_seats_count`.
+- Orders by newest created event first.
+
+### 8.2 List pending events
+
+```txt
+GET /api/admin/events/pending
+```
+
+Query parameters:
+
+- Same as `GET /api/admin/events`, except `status` is forced to `pending`.
+
+Behavior:
+
+- Returns only events with `status = pending`.
+- Use this endpoint for the admin approval queue.
+
+### 8.3 Show event
+
+```txt
+GET /api/admin/events/{event}
+```
+
+Behavior:
+
+- Admin can view any event regardless of organizer or status.
+- Includes `organizer`, `zones_count`, `seats_count`, and `available_seats_count`.
+
+### 8.4 Update allowed event information
 
 ```txt
 PUT /api/admin/events/{event}
 ```
 
-Request body is partial — only send fields you want to change:
+This is the admin API for editing event information. Request body is partial — only send fields you want to change.
 
-**Approve event:**
+**Edit event information:**
+
+```json
+{
+  "name": "Neon Nights Festival 2024 - Official",
+  "description": "Updated public event description.",
+  "category": "dj",
+  "thumbnail_url": "https://example.com/neon-thumb-new.jpg",
+  "banner_url": "https://example.com/neon-banner-new.jpg",
+  "venue": "SECC",
+  "starts_at": "2024-11-15 20:00:00",
+  "ends_at": "2024-11-15 23:00:00",
+  "ticket_sale_starts_at": "2024-11-01 10:00:00",
+  "ticket_sale_ends_at": "2024-11-13 23:59:00"
+}
+```
+
+**Update approval status directly:**
 
 ```json
 {
@@ -1247,7 +1322,7 @@ Request body is partial — only send fields you want to change:
 }
 ```
 
-**Mark event as special:**
+**Mark event as special directly:**
 
 ```json
 {
@@ -1255,7 +1330,7 @@ Request body is partial — only send fields you want to change:
 }
 ```
 
-**Mark as featured and special at the same time:**
+**Mark as featured and special directly:**
 
 ```json
 {
@@ -1292,15 +1367,23 @@ Validation:
 | `ticket_sale_starts_at` | No | date |
 | `ticket_sale_ends_at` | No | date, after_or_equal ticket_sale_starts_at |
 | `status` | No | `pending`, `approved`, `rejected` |
-| `display_type` | No | `rectangular`, `stadium` |
-| `master_width` | No | integer, min 1, max 1000 |
-| `master_length` | No | integer, min 1, max 1000 |
+| `display_type` | Prohibited | Admin cannot edit map type |
+| `master_width` | Prohibited | Admin cannot edit master map width |
+| `master_length` | Prohibited | Admin cannot edit master map length |
+| `bank_name` | Prohibited | Admin cannot edit bank information |
+| `bank_account_number` | Prohibited | Admin cannot edit bank information |
+| `bank_account_name` | Prohibited | Admin cannot edit bank information |
+| `zones` | Prohibited | Admin cannot edit zones from this endpoint |
+| `zone_count` | Prohibited | Admin cannot edit number of zones |
+| `zones_count` | Prohibited | Admin cannot edit number of zones |
+| `zone_prices` | Prohibited | Admin cannot edit zone prices |
 
 Behavior:
 
 - Admin can update any event, regardless of organizer.
 - Only sent fields are updated; omitted fields remain unchanged.
-- `status` can be changed to `approved` or `rejected` directly.
+- This endpoint can update `status`, but `PATCH /api/admin/events/{event}/review` is preferred for approving or rejecting pending events.
+- Sending prohibited fields returns `422` validation errors.
 
 Success response:
 
@@ -1320,13 +1403,268 @@ Success response:
 }
 ```
 
-## 9. Customer Order & Ticket APIs
+### 8.5 Review pending event
+
+```txt
+PATCH /api/admin/events/{event}/review
+```
+
+Request body:
+
+```json
+{
+  "status": "approved"
+}
+```
+
+Validation:
+
+| Field | Required | Rule |
+|---|---:|---|
+| `status` | Yes | `approved`, `rejected` |
+
+Behavior:
+
+- Only events currently in `pending` can be reviewed through this endpoint.
+- Approving changes `status` to `approved`.
+- Rejecting changes `status` to `rejected`.
+- If the event is not pending, returns `422`.
+
+Non-pending event error `422`:
+
+```json
+{
+  "success": false,
+  "message": "Only pending events can be reviewed from this endpoint."
+}
+```
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Event review status updated successfully.",
+  "data": {
+    "id": 1,
+    "status": "approved"
+  }
+}
+```
+
+### 8.6 Update homepage settings
+
+```txt
+PATCH /api/admin/events/{event}/homepage
+```
+
+Request body is partial:
+
+```json
+{
+  "is_featured": true,
+  "is_special": true,
+  "sort_order": 5
+}
+```
+
+Validation:
+
+| Field | Required | Rule |
+|---|---:|---|
+| `is_featured` | No | boolean |
+| `is_special` | No | boolean |
+| `sort_order` | No | integer, min 0 |
+
+Behavior:
+
+- Use `is_featured` for featured homepage sections.
+- Use `is_special` for special event sections.
+- Use `sort_order` for manual ordering priority.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Event homepage settings updated successfully.",
+  "data": {
+    "id": 1,
+    "is_featured": true,
+    "is_special": true,
+    "sort_order": 5
+  }
+}
+```
+
+## 9. Customer Booking, Order & Ticket APIs
 
 Auth: Bearer token required. Role: `customer`.
 
-These APIs allow customers to view their own paid orders and issued tickets.
+These APIs allow customers to lock seats, checkout selected seats, view their own paid orders, and list issued tickets.
 
-### 9.1 List customer orders
+### 9.1 Lock selected seats
+
+```txt
+POST /api/customer/events/{event}/seats/lock
+```
+
+Request body:
+
+```json
+{
+  "seat_ids": [1, 2]
+}
+```
+
+Validation:
+
+| Field | Required | Rule |
+|---|---:|---|
+| `seat_ids` | Yes | array, min 1, max 10 |
+| `seat_ids.*` | Yes | integer, distinct, exists in seats |
+
+Behavior:
+
+- Event must be `approved`.
+- Ticket sale window must be open.
+- Seats must belong to the event.
+- Seats must be `available`, or already locked by the same customer.
+- Seats locked by another customer return `409`.
+- Lock duration is 10 minutes.
+- Expired locks are released before attempting a new lock.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "message": "Seats locked successfully.",
+  "lock_minutes": 10,
+  "data": [
+    {
+      "id": 1,
+      "zone_id": 1,
+      "row_index": 1,
+      "col_index": 1,
+      "status": "locked",
+      "locked_by": 5,
+      "locked_at": "2026-05-20T12:00:00+07:00",
+      "locked_until": "2026-05-20T12:10:00+07:00",
+      "zone": {
+        "id": 1,
+        "name": "VIP",
+        "price": "1500000.00",
+        "color": "#FF4444"
+      }
+    }
+  ]
+}
+```
+
+Seat conflict `409`:
+
+```json
+{
+  "success": false,
+  "message": "One or more selected seats are already locked.",
+  "errors": null
+}
+```
+
+### 9.2 Release selected seats
+
+```txt
+DELETE /api/customer/events/{event}/seats/lock
+```
+
+Request body:
+
+```json
+{
+  "seat_ids": [1, 2]
+}
+```
+
+Behavior:
+
+- Releases only seats currently locked by the authenticated customer.
+- Returned seats will have `status = available` if released.
+
+### 9.3 Checkout locked seats
+
+```txt
+POST /api/customer/events/{event}/orders
+```
+
+Request body:
+
+```json
+{
+  "seat_ids": [1, 2],
+  "payment_method": "mock",
+  "payment_reference": "MOCK-FE-123"
+}
+```
+
+Validation:
+
+| Field | Required | Rule |
+|---|---:|---|
+| `seat_ids` | Yes | array, min 1, max 10 |
+| `seat_ids.*` | Yes | integer, distinct, exists in seats |
+| `payment_method` | No | `mock` |
+| `payment_reference` | No | string, max 255 |
+
+Behavior:
+
+- Customer must lock every selected seat before checkout.
+- Locks must still be active and owned by the authenticated customer.
+- Creates a paid order immediately for the mock payment flow.
+- Creates one ticket per selected seat.
+- Changes selected seats to `sold`.
+- Checkout may proceed even if all remaining seats are locked by the current customer.
+
+Success response `201`:
+
+```json
+{
+  "success": true,
+  "message": "Checkout completed successfully.",
+  "data": {
+    "id": 1,
+    "order_code": "ORD-20260520120000-ABCDEFGH",
+    "status": "paid",
+    "subtotal_amount": "3000000.00",
+    "total_amount": "3000000.00",
+    "currency": "VND",
+    "payment_method": "mock",
+    "payment_reference": "MOCK-FE-123",
+    "paid_at": "2026-05-20T12:00:00+07:00",
+    "ticket_count": 2,
+    "tickets": [
+      {
+        "id": 1,
+        "ticket_code": "TICK-20260520120000-ABCDEFGH",
+        "status": "valid",
+        "display_status": "valid"
+      }
+    ]
+  }
+}
+```
+
+Checkout without active lock `409`:
+
+```json
+{
+  "success": false,
+  "message": "Please lock all selected seats before checkout.",
+  "errors": null
+}
+```
+
+### 9.4 List customer orders
 
 ```txt
 GET /api/customer/orders
@@ -1374,7 +1712,7 @@ Success response:
 }
 ```
 
-### 9.2 Show customer order
+### 9.5 Show customer order
 
 ```txt
 GET /api/customer/orders/{order}
@@ -1423,7 +1761,7 @@ Success response:
 }
 ```
 
-### 9.3 List customer tickets
+### 9.6 List customer tickets
 
 ```txt
 GET /api/customer/tickets
@@ -1433,7 +1771,25 @@ Query parameters:
 
 | Name | Required | Description |
 |---|---:|---|
+| `status` | No | `valid`, `used`, `expired`, `void` |
+| `sort_by` | No | `issued_at`, `event_starts_at`, `created_at`, `status`; default `issued_at` |
+| `sort_direction` | No | `asc`, `desc`; default `desc` |
 | `per_page` | No | Page size, default 12 |
+
+Ticket display status:
+
+- `valid`: ticket status is `valid` and event has not ended.
+- `used`: ticket status is `used`.
+- `expired`: ticket status is still `valid`, but event `ends_at` is in the past.
+- `void`: ticket status is `void`.
+
+Examples:
+
+```txt
+GET /api/customer/tickets?status=valid&sort_by=event_starts_at&sort_direction=asc
+GET /api/customer/tickets?status=used&sort_by=issued_at&sort_direction=desc
+GET /api/customer/tickets?status=expired
+```
 
 Success response:
 
@@ -1446,6 +1802,8 @@ Success response:
       "ticket_code": "TICK-202411150001",
       "qr_code": "QR-202411150001",
       "status": "valid",
+      "display_status": "valid",
+      "is_expired": false,
       "issued_at": "2024-11-10T10:30:00+07:00",
       "checked_in_at": null,
       "event": {
@@ -1453,6 +1811,7 @@ Success response:
         "name": "Neon Nights Festival 2024",
         "thumbnail_url": "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
         "starts_at": "2024-11-15T20:00:00+07:00",
+        "ends_at": "2024-11-15T23:00:00+07:00",
         "venue": "Nhà thi đấu Phú Thọ, TP.HCM"
       },
       "seat": {
@@ -1481,7 +1840,7 @@ Success response:
 }
 ```
 
-### 9.4 Show customer ticket
+### 9.7 Show customer ticket
 
 ```txt
 GET /api/customer/tickets/{ticket}
@@ -1502,6 +1861,8 @@ Success response:
     "ticket_code": "TICK-202411150001",
     "qr_code": "QR-202411150001",
     "status": "valid",
+    "display_status": "valid",
+    "is_expired": false,
     "issued_at": "2024-11-10T10:30:00+07:00",
     "checked_in_at": null,
     "event": {
@@ -1509,6 +1870,7 @@ Success response:
       "name": "Neon Nights Festival 2024",
       "thumbnail_url": "https://images.unsplash.com/photo-1501386761578-eac5c94b800a",
       "starts_at": "2024-11-15T20:00:00+07:00",
+      "ends_at": "2024-11-15T23:00:00+07:00",
       "venue": "Nhà thi đấu Phú Thọ, TP.HCM"
     },
     "seat": {
@@ -1531,7 +1893,7 @@ Success response:
 }
 ```
 
-## 9. Current migration requirements
+## 10. Current migration requirements
 
 Before manual testing, run:
 
@@ -1540,7 +1902,7 @@ php artisan migrate
 php artisan db:seed --class=AdminSeeder
 ```
 
-## 10. Mail configuration
+## 11. Mail configuration
 
 For real email delivery, configure SMTP in `.env`.
 
@@ -1556,7 +1918,7 @@ Then read verification codes in:
 storage/logs/laravel.log
 ```
 
-## 10. Documentation update rule
+## 12. Documentation update rule
 
 This file is the API source of truth for frontend integration.
 

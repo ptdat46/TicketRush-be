@@ -16,6 +16,10 @@ Mô hình sản phẩm tham chiếu giống các nền tảng đặt vé sự ki
 ### Admin
 
 - Duyệt hoặc từ chối sự kiện do Organizer gửi lên.
+- Xem danh sách tất cả sự kiện và lọc riêng các sự kiện `pending`.
+- Sửa các thông tin public/marketing của event khi cần.
+- Chọn event hiển thị ở trang chính bằng `is_featured`, `is_special` và `sort_order`.
+- Không được sửa thông tin ngân hàng, cấu hình bản đồ, số zones hoặc giá zones của event.
 - Quản lý người dùng, sự kiện, danh mục và dữ liệu toàn hệ thống.
 - Theo dõi giao dịch, log hệ thống và các hành vi bất thường.
 
@@ -44,7 +48,6 @@ Mỗi sự kiện có một bản đồ tổng thể với các thông tin:
 
 - **display_type**: Kiểu hiển thị của sơ đồ.
   - `rectangular`: Sơ đồ chữ nhật.
-  - `arc`: Sơ đồ vòng cung.
   - `stadium`: Sơ đồ sân vận động.
 - **master_width**: Chiều rộng tổng theo đơn vị ô lưới.
 - **master_length**: Chiều dài tổng theo đơn vị ô lưới.
@@ -84,17 +87,25 @@ Ghế được tự động sinh dựa trên kích thước của từng zone c�
 
 1. Organizer tạo sự kiện và thiết kế sơ đồ.
 2. Sự kiện có trạng thái mặc định `pending`.
-3. Admin duyệt sự kiện sang `approved` hoặc từ chối sang `rejected`.
+3. Admin xem danh sách pending events và duyệt sự kiện sang `approved` hoặc từ chối sang `rejected`.
 4. Chỉ sự kiện `approved` mới hiển thị cho Customer.
+5. Admin có thể sửa thông tin event được phép trước hoặc sau khi duyệt, nhưng không được sửa bank fields, master map fields, zones, số zones hoặc giá zones.
+6. Admin chọn event lên trang chính bằng `is_featured`, `is_special` và `sort_order`.
 
 ### Đặt vé
 
 1. Customer xem sơ đồ sự kiện.
 2. Customer chọn ghế còn `available`.
-3. Hệ thống lock ghế trong 10 phút.
-4. Customer xác nhận thanh toán giả lập.
-5. Hệ thống tạo order, ticket QR và chuyển ghế sang `sold`.
-6. Vé đã bán không hỗ trợ hoàn tiền.
+3. Hệ thống lock ghế trong 10 phút bằng `status = locked`, `locked_by`, `locked_at`.
+4. Customer checkout các ghế đã lock bằng mock payment.
+5. Hệ thống tạo paid order, ticket QR và chuyển ghế sang `sold`.
+6. Checkout chỉ thành công nếu tất cả ghế được chọn đang được chính customer lock và lock chưa hết hạn.
+7. Vé đã bán không hỗ trợ hoàn tiền.
+8. Vé hiển thị cho customer có trạng thái dẫn xuất:
+   - `valid`: ticket còn hiệu lực, event chưa kết thúc.
+   - `used`: ticket đã check-in.
+   - `expired`: ticket vẫn `valid` trong DB nhưng event đã kết thúc.
+   - `void`: ticket bị hủy hiệu lực theo policy nội bộ.
 
 ### Dọn ghế hết hạn lock
 
@@ -162,9 +173,20 @@ Lưu thông tin sự kiện và cấu hình map.
 - `starts_at`
 - `ends_at`
 - `status`: `pending`, `approved`, `rejected`
-- `display_type`: `rectangular`, `arc`, `stadium`
+- `display_type`: `rectangular`, `stadium`
 - `master_width`
 - `master_length`
+- `category`
+- `thumbnail_url`
+- `banner_url`
+- `is_featured`
+- `is_special`
+- `sort_order`
+- `ticket_sale_starts_at`
+- `ticket_sale_ends_at`
+- `bank_name`
+- `bank_account_number`
+- `bank_account_name`
 
 ### zones
 
@@ -355,7 +377,10 @@ Cần ưu tiên test các luồng rủi ro cao:
 ### Admin module
 
 - Quản lý user.
-- Duyệt event.
+- Xem danh sách event, bao gồm filter `pending`, `approved`, `rejected`.
+- Duyệt hoặc từ chối pending event.
+- Sửa thông tin event được phép; không sửa bank fields, map fields, số zones hoặc giá zones.
+- Cấu hình event lên trang chính bằng `is_featured`, `is_special`, `sort_order`.
 - Xem danh sách order/ticket.
 - Xem log hệ thống.
 
@@ -374,6 +399,8 @@ Cần ưu tiên test các luồng rủi ro cao:
 - Lock seats.
 - Checkout.
 - View orders and tickets.
+- Filter tickets by `valid`, `used`, `expired`, `void`.
+- Sort tickets by issued time, event start time, created time, or status.
 
 ### Check-in module
 
