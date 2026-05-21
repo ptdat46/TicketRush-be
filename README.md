@@ -1,11 +1,110 @@
 # TicketRush Backend
 
-## Setup
+## Setup local
 
-- Chạy `composer install` để tải các thư viện PHP.
-- Tạo file môi trường: `cp .env.example .env`.
-- Chạy migration: `php artisan migrate`.
-- Nếu dự án chưa có API routes, chạy `php artisan install:api` để bật `api.php`.
+### Yêu cầu
+
+- PHP `>= 8.2`
+- Composer
+- Node.js và npm
+- MySQL đang chạy local
+
+> Nếu Windows báo `php : The term 'php' is not recognized`, hãy đóng terminal hiện tại rồi mở terminal mới để PATH được cập nhật. Kiểm tra lại bằng `php -v`.
+
+### Cài đặt
+
+1. Cài thư viện PHP:
+
+```bash
+composer install
+```
+
+2. Cài thư viện frontend:
+
+```bash
+npm install
+```
+
+3. Tạo file môi trường:
+
+```bash
+cp .env.example .env
+```
+
+Trên Windows PowerShell có thể dùng:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+4. Cấu hình MySQL trong `.env`:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=ticketrush
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+Nếu MySQL local có mật khẩu, điền vào `DB_PASSWORD`.
+
+5. Tạo database MySQL:
+
+```sql
+CREATE DATABASE ticketrush CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Có thể chạy bằng terminal:
+
+```bash
+mysql -uroot -p -e "CREATE DATABASE IF NOT EXISTS ticketrush CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
+
+6. Tạo app key:
+
+```bash
+php artisan key:generate
+```
+
+7. Chạy migration và seed dữ liệu mẫu:
+
+```bash
+php artisan migrate --seed
+```
+
+8. Chạy backend local:
+
+```bash
+php artisan serve
+```
+
+Backend mặc định chạy tại:
+
+```text
+http://127.0.0.1:8000
+```
+
+Endpoint test nhanh:
+
+```text
+GET http://127.0.0.1:8000/api/events
+```
+
+Nếu cổng `8000` đã được dùng:
+
+```bash
+php artisan serve --port=8001
+```
+
+### Build frontend assets
+
+Nếu cần build assets:
+
+```bash
+npm run build
+```
 
 ## Tài khoản seeder
 
