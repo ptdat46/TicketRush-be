@@ -14,25 +14,12 @@ class PublicEventController extends Controller
 {
     public function index(PublicEventIndexRequest $request, PublicEventService $publicEvents): JsonResponse
     {
-        $events = $publicEvents->list($request->filters());
-
-        if (! $events instanceof LengthAwarePaginator) {
-            return response()->json([
-                'success' => true,
-                'data' => HomepageEventResource::collection($events),
-            ]);
-        }
+        $payload = $publicEvents->cachedListPayload($request->filters());
 
         return response()->json([
             'success' => true,
-            'data' => HomepageEventResource::collection($events),
-            'meta' => [
-                'current_page' => $events->currentPage(),
-                'last_page' => $events->lastPage(),
-                'per_page' => $events->perPage(),
-                'total' => $events->total(),
-            ],
-        ]);
+            ...$payload,
+        ])->setPublic()->setMaxAge(60);
     }
 
     public function categoriesList(): JsonResponse
@@ -40,7 +27,7 @@ class PublicEventController extends Controller
         return response()->json([
             'success' => true,
             'data' => $this->categories(),
-        ]);
+        ])->setPublic()->setMaxAge(3600);
     }
 
     public function show(Event $event): JsonResponse
