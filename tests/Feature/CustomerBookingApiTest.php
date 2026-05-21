@@ -142,6 +142,52 @@ class CustomerBookingApiTest extends TestCase
             ->assertJsonPath('message', 'Please wait until your queue turn before booking this event.');
     }
 
+    public function test_customer_can_load_seat_map_after_entering_booking_turn(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(2);
+        $customer = User::factory()->create(['role' => 'customer']);
+        $otherCustomer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $seats[0]->update([
+            'status' => 'locked',
+            'locked_by' => $customer->id,
+            'locked_at' => now(),
+        ]);
+
+        $seats[1]->update([
+            'status' => 'locked',
+            'locked_by' => $otherCustomer->id,
+            'locked_at' => now(),
+        ]);
+
+        $this->actingAs($customer, 'sanctum')
+            ->getJson("/api/customer/events/{$event->id}/seat-map")
+            ->assertOk()
+            ->assertJsonPath('data.event.id', $event->id)
+            ->assertJsonPath('data.event.master_width', 20)
+            ->assertJsonPath('data.lock_minutes', 10)
+            ->assertJsonPath('data.max_selectable_seats', 10)
+            ->assertJsonCount(1, 'data.zones')
+            ->assertJsonCount(2, 'data.zones.0.seats')
+            ->assertJsonPath('data.zones.0.seats.0.is_locked_by_me', true)
+            ->assertJsonPath('data.zones.0.seats.1.is_locked_by_me', false);
+    }
+
+    public function test_customer_must_enter_booking_turn_before_loading_seat_map(): void
+    {
+        [$event] = $this->createApprovedEventWithSeats(1);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->actingAs($customer, 'sanctum')
+            ->getJson("/api/customer/events/{$event->id}/seat-map")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Please wait until your queue turn before booking this event.');
+    }
+
     public function test_waiting_room_limits_active_customers_to_total_event_seats(): void
     {
         EventFacade::fake([

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminEventController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CustomerOrderController;
 use App\Http\Controllers\Api\CustomerSeatLockController;
+use App\Http\Controllers\Api\CustomerSeatMapController;
 use App\Http\Controllers\Api\CustomerTicketController;
 use App\Http\Controllers\Api\CustomerWaitingRoomController;
 use App\Http\Controllers\Api\OrganizerEventController;
@@ -64,6 +65,7 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::post('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'store']);
         Route::get('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'show']);
         Route::delete('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'destroy']);
+        Route::get('/customer/events/{event}/seat-map', [CustomerSeatMapController::class, 'show']);
         Route::post('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'store']);
         Route::delete('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'destroy']);
         Route::post('/customer/events/{event}/orders', [CustomerOrderController::class, 'store']);

@@ -4,15 +4,21 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckoutSeatsRequest;
+use App\Http\Requests\CustomerOrderIndexRequest;
 use App\Http\Resources\OrderResource;
 use App\Models\Event;
 use App\Models\Order;
+use App\Repositories\CustomerOrderRepository;
 use App\Services\CheckoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CustomerOrderController extends Controller
 {
+    public function __construct(
+        private readonly CustomerOrderRepository $orders,
+    ) {}
+
     public function store(CheckoutSeatsRequest $request, Event $event, CheckoutService $checkoutService): JsonResponse
     {
         $data = $request->validated();
@@ -32,14 +38,9 @@ class CustomerOrderController extends Controller
         ], 201);
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(CustomerOrderIndexRequest $request): JsonResponse
     {
-        $orders = Order::query()
-            ->where('customer_id', $request->user()->id)
-            ->with('event')
-            ->withCount('tickets')
-            ->latest()
-            ->paginate((int) $request->integer('per_page', 12));
+        $orders = $this->orders->paginateForCustomer($request->user(), $request->filters());
 
         return response()->json([
             'success' => true,

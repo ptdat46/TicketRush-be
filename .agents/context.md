@@ -350,17 +350,24 @@ Các response dùng lại nhiều nên đi qua `App\Support\ApiResponse` thay v�
 - Tránh N+1 query khi load event map: event -> zones -> seats.
 - Chỉ select các trường cần thiết khi render map.
 - Trang chủ/public event listing dùng `events.total_seats` và `events.available_seats_count` đã cache, không count trực tiếp bảng `seats` cho mỗi request.
+- Các API danh sách event phải select cột cần dùng, eager-load organizer với danh sách cột rõ ràng, và đi qua repository để tránh query nặng trong controller.
+- Seat map cho customer dùng endpoint `GET /api/customer/events/{event}/seat-map`; endpoint này chỉ mở cho customer có waiting-room entry `active` và trả zones + seats đã sắp xếp để FE render sơ đồ đặt vé.
 - Thêm index cho các cột lọc nhiều:
   - `events.status`
   - `events.organizer_id`
+  - `events.category`
+  - `events.created_at`
   - `events.total_seats`
   - `events.available_seats_count`
   - `zones.event_id`
   - `seats.status`
+  - `seats.zone_id`
   - `seats.locked_at`
   - `orders.customer_id`
+  - `orders.created_at`
   - `orders.event_id`
   - `tickets.customer_id`
+  - `tickets.issued_at`
   - `tickets.event_id`
 - Dùng pagination cho danh sách events, orders và tickets.
 

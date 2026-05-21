@@ -1713,7 +1713,78 @@ Success response:
 }
 ```
 
-### 9.4 Lock selected seats
+### 9.4 Load seat map
+
+```txt
+GET /api/customer/events/{event}/seat-map
+```
+
+Behavior:
+
+- Customer must have an active waiting-room turn for this event.
+- Event must be approved and ticket sale window must be open.
+- Expired seat locks are released before the map is returned.
+- FE should render zones and seats from this response.
+- When a user selects seats, FE calls `POST /api/customer/events/{event}/seats/lock` immediately with the selected `seat_ids`.
+
+Success response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "event": {
+      "id": 1,
+      "name": "Neon Nights Festival 2024",
+      "display_type": "stadium",
+      "master_width": 50,
+      "master_length": 30,
+      "total_seats": 500,
+      "available_seats_count": 124,
+      "ticket_sale_status": "on_sale"
+    },
+    "lock_minutes": 10,
+    "max_selectable_seats": 10,
+    "zones": [
+      {
+        "id": 1,
+        "name": "VIP",
+        "price": "1500000.00",
+        "color": "#FF4444",
+        "icon_url": null,
+        "pos_x": 1,
+        "pos_y": 1,
+        "width": 10,
+        "length": 5,
+        "is_seating": true,
+        "seats": [
+          {
+            "id": 101,
+            "row_index": 0,
+            "col_index": 0,
+            "status": "available",
+            "is_locked_by_me": false,
+            "locked_until": null,
+            "updated_at": "2026-05-21T10:05:00+07:00"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Waiting-room turn required `409`:
+
+```json
+{
+  "success": false,
+  "message": "Please wait until your queue turn before booking this event.",
+  "errors": null
+}
+```
+
+### 9.5 Lock selected seats
 
 ```txt
 POST /api/customer/events/{event}/seats/lock
@@ -1793,7 +1864,7 @@ Waiting-room turn required `409`:
 }
 ```
 
-### 9.5 Release selected seats
+### 9.6 Release selected seats
 
 ```txt
 DELETE /api/customer/events/{event}/seats/lock
@@ -1812,7 +1883,7 @@ Behavior:
 - Releases only seats currently locked by the authenticated customer.
 - Returned seats will have `status = available` if released.
 
-### 9.6 Checkout locked seats
+### 9.7 Checkout locked seats
 
 ```txt
 POST /api/customer/events/{event}/orders
@@ -1886,7 +1957,7 @@ Checkout without active lock `409`:
 }
 ```
 
-### 9.7 List customer orders
+### 9.8 List customer orders
 
 ```txt
 GET /api/customer/orders
@@ -1934,7 +2005,7 @@ Success response:
 }
 ```
 
-### 9.8 Show customer order
+### 9.9 Show customer order
 
 ```txt
 GET /api/customer/orders/{order}
@@ -1983,7 +2054,7 @@ Success response:
 }
 ```
 
-### 9.9 List customer tickets
+### 9.10 List customer tickets
 
 ```txt
 GET /api/customer/tickets
@@ -2062,7 +2133,7 @@ Success response:
 }
 ```
 
-### 9.10 Show customer ticket
+### 9.11 Show customer ticket
 
 ```txt
 GET /api/customer/tickets/{ticket}

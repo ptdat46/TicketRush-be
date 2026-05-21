@@ -16,8 +16,25 @@ class CustomerTicketRepository
         $sortDirection = $filters['sort_direction'] ?? 'desc';
 
         return Ticket::query()
+            ->select([
+                'id',
+                'ticket_code',
+                'qr_code',
+                'order_id',
+                'event_id',
+                'seat_id',
+                'customer_id',
+                'status',
+                'issued_at',
+                'checked_in_at',
+                'created_at',
+            ])
             ->where('customer_id', $customer->id)
-            ->with(['event', 'seat.zone'])
+            ->with([
+                'event:id,name,thumbnail_url,starts_at,ends_at,venue',
+                'seat:id,zone_id,row_index,col_index',
+                'seat.zone:id,name,price',
+            ])
             ->when(isset($filters['status']), fn (Builder $query) => $this->filterDisplayStatus($query, $filters['status']))
             ->when($sortBy === 'event_starts_at', fn (Builder $query) => $query->orderBy(
                 Event::select('starts_at')->whereColumn('events.id', 'tickets.event_id'),
