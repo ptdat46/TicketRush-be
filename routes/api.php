@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminEventController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CustomerMockPaymentController;
 use App\Http\Controllers\Api\CustomerOrderController;
 use App\Http\Controllers\Api\CustomerSeatLockController;
 use App\Http\Controllers\Api\CustomerSeatMapController;
@@ -68,6 +69,8 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
         Route::get('/customer/events/{event}/seat-map', [CustomerSeatMapController::class, 'show']);
         Route::post('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'store']);
         Route::delete('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'destroy']);
+        Route::delete('/customer/events/{event}/seats/unlock', [CustomerSeatLockController::class, 'destroy']);
+        Route::post('/customer/events/{event}/payments/mock-success', [CustomerMockPaymentController::class, 'success']);
         Route::post('/customer/events/{event}/orders', [CustomerOrderController::class, 'store']);
         Route::apiResource('/customer/orders', CustomerOrderController::class)->only(['index', 'show']);
         Route::apiResource('/customer/tickets', CustomerTicketController::class)->only(['index', 'show']);

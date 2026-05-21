@@ -103,12 +103,14 @@ Ghế được tự động sinh dựa trên kích thước của từng zone c�
 4. Customer chỉ được lock ghế hoặc checkout khi waiting-room entry đang `active`.
 5. Customer xem sơ đồ sự kiện.
 6. Customer chọn ghế còn `available`.
-7. Hệ thống lock ghế trong 10 phút bằng `status = locked`, `locked_by`, `locked_at`.
-8. Customer checkout các ghế đã lock bằng mock payment.
-9. Hệ thống tạo paid order, ticket QR và chuyển ghế sang `sold`.
-10. Checkout chỉ thành công nếu tất cả ghế được chọn đang được chính customer lock và lock chưa hết hạn.
-11. Vé đã bán không hỗ trợ hoàn tiền.
-12. Vé hiển thị cho customer có trạng thái dẫn xuất:
+7. FE giữ danh sách ghế đã chọn ở local state trong lúc user chọn ghế.
+8. Khi user vào bước thanh toán, FE gọi lock một lần bằng `POST /customer/events/{event}/seats/lock`.
+9. Nếu user bỏ chọn/quay lại sau khi đã lock, FE gọi unlock bằng `DELETE /customer/events/{event}/seats/unlock`.
+10. Nếu user tắt trình duyệt hoặc không thanh toán, scheduler `seats:release-expired-locks` trả ghế về `available` sau 10 phút.
+11. Mock payment success API tạo paid order, ticket QR và chuyển ghế sang `sold`.
+12. Checkout/payment success chỉ thành công nếu tất cả ghế được chọn đang được chính customer lock và lock chưa hết hạn.
+13. Vé đã bán không hỗ trợ hoàn tiền.
+14. Vé hiển thị cho customer có trạng thái dẫn xuất:
    - `valid`: ticket còn hiệu lực, event chưa kết thúc.
    - `used`: ticket đã check-in.
    - `expired`: ticket vẫn `valid` trong DB nhưng event đã kết thúc.

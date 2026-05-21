@@ -109,6 +109,31 @@ class CustomerBookingApiTest extends TestCase
         ]);
     }
 
+    public function test_checkout_ignores_payment_method_and_defaults_to_mock(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats();
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/orders", [
+                'seat_ids' => [$seats[0]->id],
+                'payment_method' => 'Mock payment',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.payment_method', 'mock');
+    }
+
     public function test_customer_must_lock_seats_before_checkout(): void
     {
         [$event, $seats] = $this->createApprovedEventWithSeats();
@@ -276,6 +301,87 @@ class CustomerBookingApiTest extends TestCase
         $this->assertDatabaseHas('events', [
             'id' => $event->id,
             'available_seats_count' => 2,
+        ]);
+    }
+
+    public function test_customer_can_unlock_selected_seats_with_explicit_unlock_endpoint(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(2);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        $this->actingAs($customer, 'sanctum')
+            ->deleteJson("/api/customer/events/{$event->id}/seats/unlock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Seats released successfully.')
+            ->assertJsonPath('data.0.status', 'available');
+    }
+
+    public function test_mock_payment_success_creates_paid_order_for_locked_seats(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(2);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $this->joinWaitingRoom($customer, $event)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active');
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/seats/lock", [
+                'seat_ids' => [$seats[0]->id],
+            ])
+            ->assertOk();
+
+        $this->actingAs($customer, 'sanctum')
+            ->postJson("/api/customer/events/{$event->id}/payments/mock-success", [
+                'seat_ids' => [$seats[0]->id],
+                'payment_reference' => 'MOCK-WEBHOOK-OK',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Mock payment confirmed successfully.')
+            ->assertJsonPath('data.status', 'paid')
+            ->assertJsonPath('data.payment_reference', 'MOCK-WEBHOOK-OK')
+            ->assertJsonCount(1, 'data.tickets');
+    }
+
+    public function test_release_expired_locks_command_releases_stale_locks(): void
+    {
+        [$event, $seats] = $this->createApprovedEventWithSeats(1);
+        $customer = User::factory()->create(['role' => 'customer']);
+
+        $seats[0]->update([
+            'status' => 'locked',
+            'locked_by' => $customer->id,
+            'locked_at' => now()->subMinutes(11),
+        ]);
+
+        $event->update(['available_seats_count' => 0]);
+
+        $this->artisan('seats:release-expired-locks')
+            ->expectsOutput('Expired seat locks released.')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('seats', [
+            'id' => $seats[0]->id,
+            'status' => 'available',
+            'locked_by' => null,
+            'locked_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('events', [
+            'id' => $event->id,
+            'available_seats_count' => 1,
         ]);
     }
 

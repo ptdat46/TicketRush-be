@@ -27,7 +27,7 @@ class CustomerOrderController extends Controller
             $event,
             $request->user(),
             $data['seat_ids'],
-            $data['payment_method'] ?? 'mock',
+            'mock',
             $data['payment_reference'] ?? null,
         );
 

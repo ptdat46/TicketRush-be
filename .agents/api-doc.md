@@ -1815,6 +1815,7 @@ Behavior:
 - Seats locked by another customer return `409`.
 - Lock duration is 10 minutes.
 - Expired locks are released before attempting a new lock.
+- Recommended FE flow: keep selected seats in local state while choosing; call this API once when user enters the payment step.
 
 Success response:
 
@@ -1868,6 +1869,7 @@ Waiting-room turn required `409`:
 
 ```txt
 DELETE /api/customer/events/{event}/seats/lock
+DELETE /api/customer/events/{event}/seats/unlock
 ```
 
 Request body:
@@ -1882,8 +1884,50 @@ Behavior:
 
 - Releases only seats currently locked by the authenticated customer.
 - Returned seats will have `status = available` if released.
+- Use this when the user deselects seats after they were already locked, goes back from payment, or cancels checkout.
+- If the browser closes and FE cannot call unlock, the scheduler releases expired locks after 10 minutes.
 
-### 9.7 Checkout locked seats
+### 9.7 Mock payment success
+
+```txt
+POST /api/customer/events/{event}/payments/mock-success
+```
+
+This is a development/demo endpoint that acts like a successful payment webhook response. It does not integrate with a real payment gateway.
+
+Request body:
+
+```json
+{
+  "seat_ids": [1, 2],
+  "payment_reference": "MOCK-WEBHOOK-123"
+}
+```
+
+Behavior:
+
+- Customer must have already locked every selected seat.
+- Locks must still be active and owned by the authenticated customer.
+- Creates a paid order immediately.
+- Creates one ticket per selected seat.
+- Changes selected seats to `sold`.
+
+Success response `201`:
+
+```json
+{
+  "success": true,
+  "message": "Mock payment confirmed successfully.",
+  "data": {
+    "id": 1,
+    "status": "paid",
+    "payment_reference": "MOCK-WEBHOOK-123",
+    "ticket_count": 2
+  }
+}
+```
+
+### 9.8 Checkout locked seats
 
 ```txt
 POST /api/customer/events/{event}/orders
@@ -1894,7 +1938,6 @@ Request body:
 ```json
 {
   "seat_ids": [1, 2],
-  "payment_method": "mock",
   "payment_reference": "MOCK-FE-123"
 }
 ```
@@ -1905,7 +1948,6 @@ Validation:
 |---|---:|---|
 | `seat_ids` | Yes | array, min 1, max 10 |
 | `seat_ids.*` | Yes | integer, distinct, exists in seats |
-| `payment_method` | No | `mock` |
 | `payment_reference` | No | string, max 255 |
 
 Behavior:
@@ -1914,6 +1956,7 @@ Behavior:
 - Customer must have an active waiting-room turn for this event.
 - Locks must still be active and owned by the authenticated customer.
 - Creates a paid order immediately for the mock payment flow.
+- Backend always stores `payment_method = mock`; FE does not need to send `payment_method`.
 - Creates one ticket per selected seat.
 - Changes selected seats to `sold`.
 - Checkout may proceed even if all remaining seats are locked by the current customer.
@@ -1957,7 +2000,7 @@ Checkout without active lock `409`:
 }
 ```
 
-### 9.8 List customer orders
+### 9.9 List customer orders
 
 ```txt
 GET /api/customer/orders
@@ -2005,7 +2048,7 @@ Success response:
 }
 ```
 
-### 9.9 Show customer order
+### 9.10 Show customer order
 
 ```txt
 GET /api/customer/orders/{order}
@@ -2054,7 +2097,7 @@ Success response:
 }
 ```
 
-### 9.10 List customer tickets
+### 9.11 List customer tickets
 
 ```txt
 GET /api/customer/tickets
@@ -2133,7 +2176,7 @@ Success response:
 }
 ```
 
-### 9.11 Show customer ticket
+### 9.12 Show customer ticket
 
 ```txt
 GET /api/customer/tickets/{ticket}
