@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -l app/Http/Controllers/Api/PublicEventController.php)",
+      "Bash(php -l app/Services/PublicEventService.php)",
+      "Bash(php -l config/event_categories.php)"
+    ]
+  }
+}

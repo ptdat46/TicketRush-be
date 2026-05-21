@@ -8,26 +8,22 @@ use App\Http\Resources\HomepageEventResource;
 use App\Models\Event;
 use App\Services\PublicEventService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Pagination\LengthAwarePaginator;
 
 class PublicEventController extends Controller
 {
-    public function index(PublicEventIndexRequest $request, PublicEventService $publicEvents): JsonResponse
-    {
-        $payload = $publicEvents->cachedListPayload($request->filters());
+    private const LIST_CACHE_SECONDS = 60;
 
-        return response()->json([
-            'success' => true,
-            ...$payload,
-        ])->setPublic()->setMaxAge(60);
-    }
+    private const CATEGORIES_CACHE_SECONDS = 3600;
 
-    public function categoriesList(): JsonResponse
+    public function __construct(
+        private readonly PublicEventService $publicEvents,
+    ) {}
+
+    public function index(PublicEventIndexRequest $request): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => $this->categories(),
-        ])->setPublic()->setMaxAge(3600);
+        $payload = $this->publicEvents->homepagePayload($request->filters());
+
+        return $this->success($payload, self::LIST_CACHE_SECONDS);
     }
 
     public function show(Event $event): JsonResponse
@@ -39,24 +35,26 @@ class PublicEventController extends Controller
             ], 404);
         }
 
-        return response()->json([
-            'success' => true,
+        return $this->success([
             'data' => new HomepageEventResource($event->load('organizer')),
         ]);
     }
 
-    public function categories(): array
+    public function categoriesList(): JsonResponse
     {
-        return [
-            ['key' => 'music', 'name' => 'Nhạc sống', 'icon' => 'music'],
-            ['key' => 'dj', 'name' => 'DJ / EDM', 'icon' => 'disc'],
-            ['key' => 'theater', 'name' => 'Sân khấu & Nghệ thuật', 'icon' => 'theater'],
-            ['key' => 'sport', 'name' => 'Thể thao', 'icon' => 'trophy'],
-            ['key' => 'workshop', 'name' => 'Hội thảo & Workshop', 'icon' => 'users'],
-            ['key' => 'conference', 'name' => 'Hội nghị', 'icon' => 'presentation'],
-            ['key' => 'comedy', 'name' => 'Hài kịch', 'icon' => 'smile'],
-            ['key' => 'family', 'name' => 'Gia đình', 'icon' => 'heart'],
-            ['key' => 'other', 'name' => 'Khác', 'icon' => 'ticket'],
-        ];
+        return $this->success([
+            'data' => config('event_categories'),
+        ], self::CATEGORIES_CACHE_SECONDS);
+    }
+
+    private function success(array $payload, ?int $cacheSeconds = null): JsonResponse
+    {
+        $response = response()->json(['success' => true, ...$payload]);
+
+        if ($cacheSeconds !== null) {
+            $response->setPublic()->setMaxAge($cacheSeconds);
+        }
+
+        return $response;
     }
 }
