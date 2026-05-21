@@ -1,16 +1,16 @@
 <?php
 
-use App\Http\Controllers\Api\AdminEventController;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\CustomerMockPaymentController;
-use App\Http\Controllers\Api\CustomerOrderController;
-use App\Http\Controllers\Api\CustomerSeatLockController;
-use App\Http\Controllers\Api\CustomerSeatMapController;
-use App\Http\Controllers\Api\CustomerTicketController;
-use App\Http\Controllers\Api\CustomerWaitingRoomController;
-use App\Http\Controllers\Api\OrganizerEventController;
-use App\Http\Controllers\Api\OrganizerZoneController;
-use App\Http\Controllers\Api\PublicEventController;
+use App\Http\Controllers\Api\Admin\EventController as AdminEventController;
+use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\Customer\MockPaymentController;
+use App\Http\Controllers\Api\Customer\OrderController;
+use App\Http\Controllers\Api\Customer\SeatLockController;
+use App\Http\Controllers\Api\Customer\SeatMapController;
+use App\Http\Controllers\Api\Customer\TicketController;
+use App\Http\Controllers\Api\Customer\WaitingRoomController;
+use App\Http\Controllers\Api\Organizer\EventController as OrganizerEventController;
+use App\Http\Controllers\Api\Organizer\ZoneController;
+use App\Http\Controllers\Api\Public\EventController as PublicEventController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/events', [PublicEventController::class, 'index']);
@@ -50,11 +50,11 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
 
         Route::apiResource('/organizer/events', OrganizerEventController::class);
 
-        Route::get('/organizer/events/{event}/zones', [OrganizerZoneController::class, 'index']);
-        Route::post('/organizer/events/{event}/zones', [OrganizerZoneController::class, 'store']);
-        Route::get('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'show']);
-        Route::put('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'update']);
-        Route::delete('/organizer/events/{event}/zones/{zone}', [OrganizerZoneController::class, 'destroy']);
+        Route::get('/organizer/events/{event}/zones', [ZoneController::class, 'index']);
+        Route::post('/organizer/events/{event}/zones', [ZoneController::class, 'store']);
+        Route::get('/organizer/events/{event}/zones/{zone}', [ZoneController::class, 'show']);
+        Route::put('/organizer/events/{event}/zones/{zone}', [ZoneController::class, 'update']);
+        Route::delete('/organizer/events/{event}/zones/{zone}', [ZoneController::class, 'destroy']);
     });
 
     Route::middleware(['role:customer'])->group(function (): void {
@@ -63,16 +63,16 @@ Route::middleware(['auth:sanctum'])->group(function (): void {
             'message' => 'Customer access granted.',
         ]));
 
-        Route::post('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'store']);
-        Route::get('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'show']);
-        Route::delete('/customer/events/{event}/waiting-room', [CustomerWaitingRoomController::class, 'destroy']);
-        Route::get('/customer/events/{event}/seat-map', [CustomerSeatMapController::class, 'show']);
-        Route::post('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'store']);
-        Route::delete('/customer/events/{event}/seats/lock', [CustomerSeatLockController::class, 'destroy']);
-        Route::delete('/customer/events/{event}/seats/unlock', [CustomerSeatLockController::class, 'destroy']);
-        Route::post('/customer/events/{event}/payments/mock-success', [CustomerMockPaymentController::class, 'success']);
-        Route::post('/customer/events/{event}/orders', [CustomerOrderController::class, 'store']);
-        Route::apiResource('/customer/orders', CustomerOrderController::class)->only(['index', 'show']);
-        Route::apiResource('/customer/tickets', CustomerTicketController::class)->only(['index', 'show']);
+        Route::post('/customer/events/{event}/waiting-room', [WaitingRoomController::class, 'store']);
+        Route::get('/customer/events/{event}/waiting-room', [WaitingRoomController::class, 'show']);
+        Route::delete('/customer/events/{event}/waiting-room', [WaitingRoomController::class, 'destroy']);
+        Route::get('/customer/events/{event}/seat-map', [SeatMapController::class, 'show']);
+        Route::post('/customer/events/{event}/seats/lock', [SeatLockController::class, 'store']);
+        Route::delete('/customer/events/{event}/seats/lock', [SeatLockController::class, 'destroy']);
+        Route::delete('/customer/events/{event}/seats/unlock', [SeatLockController::class, 'destroy']);
+        Route::post('/customer/events/{event}/payments/mock-success', [MockPaymentController::class, 'success']);
+        Route::post('/customer/events/{event}/orders', [OrderController::class, 'store']);
+        Route::apiResource('/customer/orders', OrderController::class)->only(['index', 'show']);
+        Route::apiResource('/customer/tickets', TicketController::class)->only(['index', 'show']);
     });
 });

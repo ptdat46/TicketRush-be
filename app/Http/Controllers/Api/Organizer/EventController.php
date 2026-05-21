@@ -1,0 +1,96 @@
+<?php
+
+namespace App\Http\Controllers\Api\Organizer;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Organizer\EventIndexRequest;
+use App\Http\Requests\Organizer\StoreEventRequest;
+use App\Http\Requests\Organizer\UpdateEventRequest;
+use App\Http\Resources\EventResource;
+use App\Models\Event;
+use App\Repositories\Organizer\EventRepository;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+class EventController extends Controller
+{
+    public function __construct(
+        private readonly EventRepository $events,
+    ) {}
+
+    public function index(OrganizerEventIndexRequest $request): AnonymousResourceCollection
+    {
+        return EventResource::collection(
+            $this->events->paginateForOrganizer($request->user(), $request->filters())
+        );
+    }
+
+    public function store(StoreEventRequest $request): JsonResponse
+    {
+        $event = Event::create([
+            ...$request->validated(),
+            'organizer_id' => $request->user()->id,
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event created successfully and is waiting for admin approval.',
+            'data' => new EventResource($event),
+        ], 201);
+    }
+
+    public function show(Request $request, Event $event): JsonResponse
+    {
+        if ((int) $event->organizer_id !== (int) $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this event.',
+            ], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => new EventResource($event->load('organizer')),
+        ]);
+    }
+
+    public function update(UpdateEventRequest $request, Event $event): JsonResponse
+    {
+        if ((int) $event->organizer_id !== (int) $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to update this event.',
+            ], 403);
+        }
+
+        $event->update([
+            ...$request->validated(),
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event updated successfully and is waiting for admin approval again.',
+            'data' => new EventResource($event->refresh()),
+        ]);
+    }
+
+    public function destroy(Request $request, Event $event): JsonResponse
+    {
+        if ((int) $event->organizer_id !== (int) $request->user()->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to delete this event.',
+            ], 403);
+        }
+
+        $event->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event deleted successfully.',
+        ]);
+    }
+}
